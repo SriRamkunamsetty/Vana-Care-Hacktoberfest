@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+html,body{margin:0;background:#070b0a;font-family:-apple-system,'SF Pro Display','SF Pro Text',system-ui,'Helvetica Neue',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#8FE3B5;text-decoration:none}a:hover{color:#FFB65C}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+::-webkit-scrollbar{display:none}
+input::placeholder{color:rgba(226,240,233,.5)}
+@keyframes vIn{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes sheetUp{from{transform:translateY(105%)}to{transform:none}}
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(70px,90px) scale(1.15)}}
+@keyframes drift2{0%,100%{transform:translate(0,0) scale(1.1)}50%{transform:translate(-80px,-60px) scale(.9)}}
+@keyframes drift3{0%,100%{transform:translate(0,0)}50%{transform:translate(-50px,70px) scale(1.2)}}
+@keyframes pulse{0%{transform:scale(.4);opacity:.7}100%{transform:scale(1.6);opacity:0}}
+@keyframes dot{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-5px);opacity:1}}
+@keyframes sunGlow{0%,100%{opacity:.9;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;gap:56px;padding:12px;background:radial-gradient(1200px 700px at 70% 10%,#12332c 0%,#08110f 60%);color:#F1F8F4">
+
+<sc-if value="{{ showGuide }}" hint-placeholder-val="{{ true }}">
+<div style="width:300px;flex:none;display:flex;flex-direction:column;gap:26px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:13px;letter-spacing:.24em;color:#8FE3B5;font-weight:600">VANA CARE</div>
+    <div style="font-size:30px;font-weight:700;line-height:1.1;letter-spacing:-.02em">Field health &amp; survival companion</div>
+    <div style="font-size:14px;color:rgba(226,240,233,.62);line-height:1.45">iOS 26/27 Liquid Glass prototype. Tap through the phone or jump to a screen.</div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="font-size:12px;letter-spacing:.14em;color:rgba(226,240,233,.5);font-weight:600">PALETTE</div>
+    <sc-for list="{{ palette }}" as="c" hint-placeholder-count="7">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:34px;height:34px;border-radius:11px;background:{{ c.hex }};box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 0 0 .5px rgba(255,255,255,.2)"></div>
+        <div style="display:flex;flex-direction:column"><div style="font-size:14px;font-weight:600">{{ c.name }}</div><div style="font-size:12px;color:rgba(226,240,233,.55)">{{ c.hex }} · {{ c.role }}</div></div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="font-size:12px;letter-spacing:.14em;color:rgba(226,240,233,.5);font-weight:600">JUMP TO</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <sc-for list="{{ jumps }}" as="j" hint-placeholder-count="7">
+        <div onClick="{{ j.go }}" style="cursor:pointer;padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;background:{{ j.bg }};color:{{ j.fg }};box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 0 0 .5px rgba(255,255,255,.18);transition:all .3s" style-hover="filter:brightness(1.15)">{{ j.label }}</div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<div style="width:{{ boxW }}px;height:{{ boxH }}px;flex:none;position:relative">
+<div style="position:absolute;left:0;top:0;width:415px;height:874px;transform:scale({{ scale }});transform-origin:0 0;padding:11px">
+<div style="position:relative;width:393px;height:852px;border-radius:{{ dev.r }}px;overflow:hidden;background:#06130f;box-shadow:0 0 0 11px #0b0c0c,0 0 0 12px #3a3d3c,0 0 0 13px #0b0c0c,0 40px 90px rgba(0,0,0,.6);isolation:isolate">
+
+<!-- fluid app background -->
+<div style="position:absolute;inset:0;opacity:{{ appBgO }};transition:opacity .9s ease;background:linear-gradient(170deg,#0B2C26 0%,#071C18 55%,#0A211C 100%);overflow:hidden">
+  <div style="position:absolute;left:-120px;top:-100px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,#2FB58E 0%,rgba(47,181,142,0) 68%);opacity:.55;filter:blur(20px);animation:drift1 16s ease-in-out infinite"></div>
+  <div style="position:absolute;right:-160px;top:300px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,#E0893A 0%,rgba(224,137,58,0) 66%);opacity:.34;filter:blur(24px);animation:drift2 20s ease-in-out infinite"></div>
+  <div style="position:absolute;left:-60px;bottom:-140px;width:460px;height:400px;border-radius:50%;background:radial-gradient(circle,#1E7F74 0%,rgba(30,127,116,0) 66%);opacity:.6;filter:blur(20px);animation:drift3 18s ease-in-out infinite"></div>
+</div>
+
+<!-- dawn landscape (splash + onboarding) -->
+<div style="position:absolute;inset:0;opacity:{{ scapeO }};transition:opacity .9s ease;pointer-events:none;overflow:hidden;background:linear-gradient(180deg,#15303E 0%,#2F5B69 28%,#8AA5A0 46%,#F0A868 62%,#F8D28E 74%)">
+  <div style="position:absolute;left:{{ sunX }};top:150px;width:360px;height:360px;margin-left:-180px;border-radius:50%;background:radial-gradient(circle,#FFF3CF 0%,rgba(255,220,150,.9) 8%,rgba(255,180,100,.45) 28%,rgba(255,160,90,0) 66%);transition:left .9s cubic-bezier(.3,1,.4,1);animation:sunGlow 6s ease-in-out infinite"></div>
+  <div style="position:absolute;left:-80px;top:300px;width:553px;height:300px;background:#4F7F82;opacity:.75;clip-path:polygon(0 100%,0 62%,10% 48%,18% 58%,30% 22%,40% 50%,48% 38%,58% 60%,68% 28%,78% 52%,88% 40%,100% 60%,100% 100%);transform:translateX({{ par1 }});transition:transform .9s cubic-bezier(.3,1,.4,1)"></div>
+  <div style="position:absolute;left:-80px;top:390px;width:553px;height:280px;background:#2A5C58;clip-path:polygon(0 100%,0 46%,12% 30%,24% 50%,38% 26%,52% 52%,64% 34%,78% 54%,90% 30%,100% 48%,100% 100%);transform:translateX({{ par2 }});transition:transform .9s cubic-bezier(.3,1,.4,1)"></div>
+  <div style="position:absolute;left:-90px;top:470px;width:573px;height:382px;background:linear-gradient(180deg,#123B36 0%,#0A2621 60%,#061713 100%);clip-path:polygon(0 100%,0 30%,2% 14%,4% 30%,6% 6%,8.5% 32%,11% 16%,13% 34%,16% 2%,19% 34%,22% 18%,24% 36%,27% 8%,30% 36%,33% 20%,36% 38%,39% 4%,42% 38%,45% 22%,48% 40%,51% 10%,54% 38%,57% 20%,60% 40%,63% 0%,66% 36%,69% 18%,72% 38%,75% 8%,78% 36%,81% 22%,84% 40%,87% 6%,90% 36%,93% 16%,96% 34%,98% 12%,100% 30%,100% 100%);transform:translateX({{ par3 }});transition:transform .9s cubic-bezier(.3,1,.4,1)"></div>
+</div>
+
+<!-- SPLASH -->
+<sc-if value="{{ isSplash }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ toOnb }}" style="position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;animation:vIn .8s ease both;cursor:pointer">
+  <div style="margin-top:170px;width:116px;height:116px;border-radius:50%;background:linear-gradient(150deg,rgba(255,255,255,.75),rgba(255,255,255,.4));backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 #fff,inset 0 -2px 6px rgba(255,255,255,.3),0 18px 50px rgba(20,50,45,.35);display:flex;align-items:center;justify-content:center;animation:floaty 5s ease-in-out infinite">
+    <svg width="74" height="74" viewBox="0 0 74 74" style="fill:#0F4A40"><path d="M37 8 L58 44 L48 44 L54 54 L20 54 L26 44 L16 44 Z"></path><path d="M37 8 L42 17 L37 15 L32 17 Z" style="fill:#fff"></path><rect x="34" y="54" width="6" height="12" rx="1"></rect><rect x="28" y="60" width="18" height="6" rx="1.5"></rect></svg>
+  </div>
+  <div style="margin-top:22px;width:100%;text-align:center;white-space:nowrap;font-size:31px;font-weight:700;letter-spacing:.14em;color:#0E3F37;text-shadow:0 1px 0 rgba(255,255,255,.4)">VANA CARE</div>
+  <div style="margin-top:10px;width:100%;font-size:19px;font-weight:600;line-height:1.35;text-align:center;color:#0E3F37">No Network.<br>Still Not Alone.</div>
+  <div style="position:absolute;bottom:64px;left:0;right:0;text-align:center;color:#fff;font-size:15px;font-weight:600;line-height:1.45;text-shadow:0 1px 8px rgba(0,0,0,.5)">AI Powered<br><span style="font-weight:500;opacity:.9">Field Health &amp; Survival Companion</span></div>
+</div>
+</sc-if>
+
+<!-- ONBOARDING -->
+<sc-if value="{{ isOnb }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:5;animation:vIn .7s ease both">
+  <div onClick="{{ skipOnb }}" style="position:absolute;top:60px;right:20px;z-index:6;cursor:pointer;padding:9px 16px;border-radius:999px;font-size:15px;font-weight:600;color:#fff;background:linear-gradient(150deg,rgba(255,255,255,.28),rgba(255,255,255,.1));backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 6px 18px rgba(0,0,0,.2)">Skip</div>
+
+  <sc-if value="{{ step0 }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;top:118px;left:22px;right:22px;display:flex;flex-direction:column;gap:12px;animation:vIn .6s ease both">
+    <div style="align-self:flex-end;max-width:240px;padding:12px 16px;border-radius:24px 24px 6px 24px;font-size:16px;line-height:1.35;color:#fff;background:linear-gradient(150deg,rgba(255,255,255,.3),rgba(255,255,255,.1));backdrop-filter:blur(24px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 10px 30px rgba(0,0,0,.2)">Deep cut on my forearm. It won't stop bleeding.</div>
+    <div style="max-width:300px;padding:14px 16px;border-radius:24px 24px 24px 6px;font-size:15.5px;line-height:1.4;color:#fff;background:linear-gradient(150deg,rgba(10,40,35,.55),rgba(10,40,35,.35));backdrop-filter:blur(24px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 10px 30px rgba(0,0,0,.25);animation:floaty 6s ease-in-out infinite">
+      <div style="display:flex;align-items:center;gap:6px;color:#8FE3B5;font-size:12px;font-weight:700;letter-spacing:.08em;margin-bottom:6px"><svg width="14" height="14" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.sparkle }}"></path></svg>VANA · ON DEVICE</div>
+      Press firmly with a clean cloth and hold for 10 minutes. Raise the arm above your heart.
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ step1 }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;top:130px;left:22px;right:22px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;animation:vIn .6s ease both">
+    <sc-for list="{{ heroTiles }}" as="h" hint-placeholder-count="4">
+      <div style="height:104px;border-radius:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;font-size:12.5px;font-weight:600;background:linear-gradient(150deg,rgba(255,255,255,.3),rgba(255,255,255,.08));backdrop-filter:blur(24px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.2);animation:floaty {{ h.dur }} ease-in-out infinite">
+        <svg width="30" height="30" viewBox="0 0 24 24" style="fill:none;stroke:{{ h.color }};stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3))"><path d="{{ h.d }}"></path></svg>{{ h.label }}
+      </div>
+    </sc-for>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ step2 }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;top:110px;left:0;right:0;height:250px;display:flex;align-items:center;justify-content:center;animation:vIn .6s ease both">
+    <div style="position:absolute;width:210px;height:210px;border-radius:50%;border:1.5px solid rgba(255,255,255,.7);animation:pulse 3s ease-out infinite"></div>
+    <div style="position:absolute;width:210px;height:210px;border-radius:50%;border:1.5px solid rgba(255,255,255,.7);animation:pulse 3s ease-out 1s infinite"></div>
+    <div style="position:absolute;width:210px;height:210px;border-radius:50%;border:1.5px solid rgba(255,255,255,.7);animation:pulse 3s ease-out 2s infinite"></div>
+    <div style="width:92px;height:92px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;background:linear-gradient(150deg,rgba(255,255,255,.4),rgba(255,255,255,.1));backdrop-filter:blur(24px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.7),0 16px 40px rgba(0,0,0,.25)"><svg width="40" height="40" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.pin }}"></path></svg></div>
+    <div style="position:absolute;bottom:0;padding:9px 16px;border-radius:999px;font-size:14px;font-weight:600;color:#fff;background:rgba(10,40,35,.5);backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,.35)">Beacon · 46.8523° N, 121.7603° W</div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ step3 }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;top:112px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:14px;animation:vIn .6s ease both">
+    <div style="width:164px;height:164px;border-radius:50%;background:conic-gradient(#8FE3B5 {{ dlDeg }}deg,rgba(255,255,255,.22) 0deg);display:flex;align-items:center;justify-content:center;box-shadow:0 16px 40px rgba(0,0,0,.25)">
+      <div style="width:148px;height:148px;border-radius:50%;background:linear-gradient(150deg,rgba(14,50,44,.85),rgba(10,38,33,.9));backdrop-filter:blur(24px);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.3)">
+        <div style="font-size:42px;font-weight:700;letter-spacing:-.02em">{{ dlText }}</div>
+        <div style="font-size:12px;color:rgba(226,240,233,.7);font-weight:600">CASCADES · 2.4 GB</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- glass bottom sheet -->
+  <div style="position:absolute;left:10px;right:10px;bottom:10px;height:{{ sheetH }}px;border-radius:48px;transition:height .6s cubic-bezier(.3,1.1,.4,1);padding:30px 26px 22px;display:flex;flex-direction:column;color:#fff;background:linear-gradient(160deg,rgba(16,56,49,.62),rgba(6,26,22,.8));backdrop-filter:blur(40px) saturate(180%);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),inset 0 -1px 0 rgba(255,255,255,.06),0 -10px 50px rgba(0,0,0,.3);border:.5px solid rgba(255,255,255,.14)">
+    <div style="font-size:12px;letter-spacing:.16em;font-weight:700;color:#FFB65C">{{ eyebrow }}</div>
+    <div style="margin-top:8px;font-size:32px;line-height:1.08;font-weight:700;letter-spacing:-.025em;text-wrap:balance">{{ title }}</div>
+    <div style="margin-top:12px;font-size:16.5px;line-height:1.42;color:rgba(226,240,233,.75);text-wrap:pretty">{{ sub }}</div>
+
+    <sc-if value="{{ step3 }}" hint-placeholder-val="{{ false }}">
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{ permRows }}" as="p" hint-placeholder-count="3">
+        <div onClick="{{ p.tap }}" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:9px 0">
+          <div style="width:34px;height:34px;border-radius:11px;background:rgba(143,227,181,.16);display:flex;align-items:center;justify-content:center;color:#8FE3B5"><svg width="19" height="19" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round"><path d="{{ p.d }}"></path></svg></div>
+          <div style="flex:1;font-size:16px;font-weight:600">{{ p.label }}</div>
+          <div style="width:51px;height:31px;border-radius:16px;background:{{ p.bg }};position:relative;transition:background .3s"><div style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);transform:translateX({{ p.x }});transition:transform .35s cubic-bezier(.3,1.5,.5,1)"></div></div>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <div style="flex:1"></div>
+    <div style="display:flex;justify-content:center;gap:7px;margin-bottom:18px">
+      <sc-for list="{{ dots }}" as="d" hint-placeholder-count="4">
+        <div style="height:8px;width:{{ d.w }}px;border-radius:4px;background:{{ d.bg }};transition:all .5s cubic-bezier(.3,1.4,.5,1)"></div>
+      </sc-for>
+    </div>
+    <div onClick="{{ next }}" style="cursor:pointer;height:58px;border-radius:29px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:700;color:#06251E;background:linear-gradient(180deg,#B5F3CF 0%,#7BD9A6 100%);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.8),inset 0 -2px 4px rgba(20,120,80,.25),0 10px 30px rgba(80,210,150,.35);opacity:{{ nextOp }};transition:transform .2s" style-active="transform:scale(.97)">{{ cta }}</div>
+    <sc-if value="{{ step3 }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ skipOnb }}" style="cursor:pointer;margin-top:14px;text-align:center;font-size:15px;font-weight:600;color:rgba(226,240,233,.7)">Set up later</div>
+    </sc-if>
+  </div>
+</div>
+</sc-if>
+
+<!-- HOME -->
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:5;overflow-y:auto;scrollbar-width:none;padding:64px 18px 130px;animation:vIn .55s ease both;display:flex;flex-direction:column;gap:18px">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding-top:6px">
+    <div onClick="{{ openProfile }}" style="cursor:pointer;width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#06251E;background:linear-gradient(150deg,#FFD08A,#FFB65C);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.7),0 8px 20px rgba(0,0,0,.3)">A</div>
+    <div style="display:flex;align-items:center;gap:8px;white-space:nowrap;padding:9px 14px;border-radius:999px;font-size:13.5px;font-weight:600;background:linear-gradient(150deg,rgba(255,255,255,.18),rgba(255,255,255,.05));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 8px 24px rgba(0,0,0,.25);border:.5px solid rgba(255,255,255,.15)"><span style="width:8px;height:8px;border-radius:50%;background:#8FE3B5;box-shadow:0 0 10px #8FE3B5"></span>Offline · AI ready</div>
+  </div>
+  <div style="padding:4px 4px 0"><div style="font-size:16px;color:rgba(226,240,233,.62);font-weight:500">Good morning</div><div style="font-size:36px;font-weight:700;letter-spacing:-.03em;line-height:1.05">Aria</div></div>
+
+  <div style="border-radius:32px;padding:18px;display:flex;flex-direction:column;gap:16px;background:linear-gradient(150deg,rgba(255,255,255,.18),rgba(255,255,255,.05));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(255,255,255,.06),0 12px 32px rgba(0,0,0,.28);border:.5px solid rgba(255,255,255,.15)">
+    <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:rgba(226,240,233,.8)"><svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:#FFB65C;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.pin }}"></path></svg>Wonderland Trail · Mount Rainier NP</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div><div style="font-size:26px;font-weight:700;letter-spacing:-.02em">1,842<span style="font-size:14px;font-weight:600;color:rgba(226,240,233,.6)"> m</span></div><div style="font-size:12.5px;color:rgba(226,240,233,.6);font-weight:500">Elevation</div></div>
+      <div><div style="font-size:26px;font-weight:700;letter-spacing:-.02em">3<span style="font-size:14px;font-weight:600;color:rgba(226,240,233,.6)">h </span>12<span style="font-size:14px;font-weight:600;color:rgba(226,240,233,.6)">m</span></div><div style="font-size:12.5px;color:rgba(226,240,233,.6);font-weight:500">Daylight left</div></div>
+      <div><div style="font-size:26px;font-weight:700;letter-spacing:-.02em">68<span style="font-size:14px;font-weight:600;color:rgba(226,240,233,.6)"> %</span></div><div style="font-size:12.5px;color:rgba(226,240,233,.6);font-weight:500">Battery</div></div>
+    </div>
+    <div style="height:7px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden"><div style="width:68%;height:100%;border-radius:4px;background:linear-gradient(90deg,#FFB65C,#FFD9A0);box-shadow:0 0 12px rgba(255,182,92,.6)"></div></div>
+  </div>
+
+  <div onClick="{{ goAsk }}" style="cursor:pointer;height:66px;border-radius:33px;display:flex;align-items:center;gap:12px;padding:0 10px 0 10px;background:linear-gradient(150deg,rgba(255,255,255,.2),rgba(255,255,255,.06));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 12px 32px rgba(0,0,0,.28);border:.5px solid rgba(255,255,255,.16);transition:transform .25s cubic-bezier(.3,1.4,.5,1)" style-active="transform:scale(.97)">
+    <div style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#06251E;background:linear-gradient(180deg,#B5F3CF,#7BD9A6);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.8),0 6px 16px rgba(80,210,150,.4)"><svg width="22" height="22" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.sparkle }}"></path></svg></div>
+    <div style="flex:1;font-size:17px;color:rgba(226,240,233,.7)">Ask Vana what's happening…</div>
+    <div style="width:40px;display:flex;justify-content:center;color:rgba(226,240,233,.75)"><svg width="22" height="22" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.mic }}"></path></svg></div>
+  </div>
+
+  <div style="font-size:22px;font-weight:700;letter-spacing:-.02em;padding:6px 4px 0">Quick help</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <sc-for list="{{ quick }}" as="q" hint-placeholder-count="4">
+      <div onClick="{{ q.go }}" style="cursor:pointer;height:118px;border-radius:28px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(150deg,rgba(255,255,255,.17),rgba(255,255,255,.05));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(255,255,255,.06),0 10px 28px rgba(0,0,0,.26);border:.5px solid rgba(255,255,255,.14);transition:transform .25s cubic-bezier(.3,1.4,.5,1)" style-active="transform:scale(.95)">
+        <div style="width:40px;height:40px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:{{ q.tint }};color:{{ q.color }}"><svg width="22" height="22" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round"><path d="{{ q.d }}"></path></svg></div>
+        <div><div style="font-size:17px;font-weight:700;letter-spacing:-.01em">{{ q.title }}</div><div style="font-size:13px;color:rgba(226,240,233,.6)">{{ q.sub }}</div></div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="border-radius:28px;padding:16px 18px;display:flex;align-items:center;gap:14px;background:linear-gradient(150deg,rgba(255,255,255,.17),rgba(255,255,255,.05));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 10px 28px rgba(0,0,0,.26);border:.5px solid rgba(255,255,255,.14)">
+    <div style="flex:1"><div style="font-size:17px;font-weight:700">Trip check-in</div><div style="font-size:13.5px;color:rgba(226,240,233,.62);margin-top:2px;line-height:1.35">Next in 04:12. Sent to contacts when a signal returns.</div></div>
+    <div onClick="{{ toggleCheckin }}" style="cursor:pointer;width:51px;height:31px;border-radius:16px;background:{{ checkinBg }};position:relative;transition:background .3s"><div style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);transform:translateX({{ checkinX }});transition:transform .35s cubic-bezier(.3,1.5,.5,1)"></div></div>
+  </div>
+  <div style="border-radius:28px;padding:16px 18px;display:flex;align-items:center;gap:14px;background:linear-gradient(150deg,rgba(255,255,255,.12),rgba(255,255,255,.04));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 10px 28px rgba(0,0,0,.22);border:.5px solid rgba(255,255,255,.12)">
+    <div style="width:40px;height:40px;border-radius:14px;background:rgba(143,227,181,.16);color:#8FE3B5;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.download }}"></path></svg></div>
+    <div style="flex:1"><div style="font-size:16px;font-weight:700">Cascades pack</div><div style="font-size:13px;color:rgba(226,240,233,.62)">2.4 GB · updated Sep 24</div></div>
+    <div style="color:#8FE3B5"><svg width="22" height="22" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.check }}"></path></svg></div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ASK -->
+<sc-if value="{{ isAsk }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:5;animation:vIn .55s ease both">
+  <div style="position:absolute;left:0;right:0;top:0;height:124px;z-index:6;pointer-events:none"><div style="position:absolute;inset:0;backdrop-filter:blur(1px);mask-image:linear-gradient(to bottom,#000 0%,#000 70%,transparent 100%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(3px);mask-image:linear-gradient(to bottom,#000 0%,#000 50%,transparent 80%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(8px);mask-image:linear-gradient(to bottom,#000 0%,#000 30%,transparent 60%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(18px);mask-image:linear-gradient(to bottom,#000 0%,#000 12%,transparent 40%)"></div><div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(7,28,24,.62),rgba(7,28,24,0))"></div></div><div style="position:absolute;left:0;right:0;top:0;height:128px;z-index:7;padding:62px 22px 0;pointer-events:none">
+    <div style="position:relative;display:flex;align-items:center;gap:10px"><div style="font-size:34px;font-weight:700;letter-spacing:-.03em">Vana</div><div style="display:flex;align-items:center;gap:6px;white-space:nowrap;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:700;color:#8FE3B5;background:rgba(143,227,181,.14);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)"><svg width="12" height="12" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round"><path d="{{ ic.bolt }}"></path></svg>On-device</div></div>
+  </div>
+  <div ref="{{ chatRef }}" style="position:absolute;inset:0;overflow-y:auto;scrollbar-width:none;padding:118px 16px 226px;display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ chat }}" as="m" hint-placeholder-count="2">
+      <div style="display:flex;justify-content:{{ m.align }};animation:vIn .4s ease both">
+        <sc-if value="{{ m.isAi }}" hint-placeholder-val="{{ true }}">
+        <div style="max-width:310px;padding:14px 16px;border-radius:26px 26px 26px 8px;font-size:16px;line-height:1.42;background:linear-gradient(150deg,rgba(255,255,255,.17),rgba(255,255,255,.05));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 10px 28px rgba(0,0,0,.25);border:.5px solid rgba(255,255,255,.14);display:flex;flex-direction:column;gap:10px">
+          <div>{{ m.text }}</div>
+          <sc-for list="{{ m.steps }}" as="st" hint-placeholder-count="0">
+            <div style="display:flex;gap:10px;align-items:flex-start"><div style="flex:none;width:22px;height:22px;border-radius:50%;background:rgba(143,227,181,.2);color:#8FE3B5;font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">{{ st.n }}</div><div style="font-size:15.5px;line-height:1.38">{{ st.t }}</div></div>
+          </sc-for>
+          <sc-if value="{{ m.hasGuide }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ m.openGuide }}" style="cursor:pointer;align-self:flex-start;display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;font-size:14px;font-weight:700;color:#06251E;background:linear-gradient(180deg,#B5F3CF,#7BD9A6);box-shadow:inset 0 1px 0 rgba(255,255,255,.8)">Open full guide<svg width="14" height="14" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.chevR }}"></path></svg></div>
+          </sc-if>
+        </div>
+        </sc-if>
+        <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:270px;padding:6px;border-radius:26px 26px 8px 26px;font-size:16px;line-height:1.38;color:#06251E;font-weight:500;background:linear-gradient(180deg,#B5F3CF,#7BD9A6);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.8),0 8px 22px rgba(80,210,150,.3);display:flex;flex-direction:column;gap:6px"><sc-if value="{{ m.hasImg }}" hint-placeholder-val="{{ false }}"><div style="width:220px;max-width:100%;height:150px;background-size:cover;background-position:center;background-image:{{ m.bgImg }};border-radius:21px 21px 6px 21px"></div></sc-if><sc-if value="{{ m.hasText }}" hint-placeholder-val="{{ true }}"><div style="padding:6px 11px 6px">{{ m.text }}</div></sc-if></div>
+        </sc-if>
+      </div>
+    </sc-for>
+    <sc-if value="{{ typing }}" hint-placeholder-val="{{ false }}">
+    <div style="align-self:flex-start;display:flex;gap:5px;padding:16px 18px;border-radius:24px 24px 24px 8px;background:linear-gradient(150deg,rgba(255,255,255,.17),rgba(255,255,255,.05));backdrop-filter:blur(28px);box-shadow:inset 0 1px 0 rgba(255,255,255,.5)">
+      <span style="width:8px;height:8px;border-radius:50%;background:#fff;animation:dot 1.2s infinite"></span><span style="width:8px;height:8px;border-radius:50%;background:#fff;animation:dot 1.2s .15s infinite"></span><span style="width:8px;height:8px;border-radius:50%;background:#fff;animation:dot 1.2s .3s infinite"></span>
+    </div>
+    </sc-if>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;height:260px;z-index:6;pointer-events:none"><div style="position:absolute;inset:0;backdrop-filter:blur(1px);mask-image:linear-gradient(to top,#000 0%,#000 70%,transparent 100%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(3px);mask-image:linear-gradient(to top,#000 0%,#000 50%,transparent 80%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(8px);mask-image:linear-gradient(to top,#000 0%,#000 30%,transparent 60%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(18px);mask-image:linear-gradient(to top,#000 0%,#000 12%,transparent 40%)"></div><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(7,28,24,.7),rgba(7,28,24,0))"></div></div><div style="position:absolute;left:0;right:0;bottom:104px;z-index:7;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:0 16px">
+      <sc-for list="{{ chips }}" as="c" hint-placeholder-count="5">
+        <div onClick="{{ c.go }}" style="cursor:pointer;flex:none;padding:9px 15px;border-radius:999px;font-size:14px;font-weight:600;white-space:nowrap;background:linear-gradient(150deg,rgba(255,255,255,.2),rgba(255,255,255,.06));backdrop-filter:blur(24px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 6px 18px rgba(0,0,0,.25);border:.5px solid rgba(255,255,255,.15)" style-active="transform:scale(.95)">{{ c.label }}</div>
+      </sc-for>
+    </div>
+    <sc-if value="{{ hasAttach }}" hint-placeholder-val="{{ false }}"><div style="margin:0 16px;align-self:flex-start;position:relative;animation:vIn .35s ease both"><div style="width:76px;height:76px;background-size:cover;background-position:center;background-image:{{ attachBg }};border-radius:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 8px 22px rgba(0,0,0,.35);border:1.5px solid rgba(255,255,255,.5)"></div><div onClick="{{ clearAttach }}" style="cursor:pointer;position:absolute;top:-7px;right:-7px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(10,36,31,.9);box-shadow:inset 0 1px 0 rgba(255,255,255,.4)"><svg width="12" height="12" viewBox="0 0 24 24" style="fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round"><path d="{{ ic.close }}"></path></svg></div></div></sc-if><div style="margin:0 16px;height:56px;border-radius:28px;display:flex;align-items:center;gap:8px;padding:0 8px 0 8px;background:linear-gradient(150deg,rgba(255,255,255,.2),rgba(255,255,255,.07));backdrop-filter:blur(30px) saturate(180%);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 12px 32px rgba(0,0,0,.3);border:.5px solid rgba(255,255,255,.16)">
+      <input type="file" accept="image/*" ref="{{ fileRef }}" onChange="{{ onFile }}" style="display:none"></input><div onClick="{{ pickFile }}" style="cursor:pointer;flex:none;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#F1F8F4;background:linear-gradient(150deg,rgba(255,255,255,.28),rgba(255,255,255,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.55);transition:transform .25s cubic-bezier(.3,1.4,.5,1)" style-active="transform:scale(.9)"><svg width="22" height="22" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round"><path d="{{ ic.plus }}"></path></svg></div><input value="{{ input }}" onChange="{{ onInput }}" onKeyDown="{{ onKey }}" placeholder="Describe the situation…" style="flex:1;min-width:0;background:transparent;border:0;outline:0;color:#F1F8F4;font-size:17px;font-family:inherit"></input>
+      <div onClick="{{ sendInput }}" style="cursor:pointer;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#06251E;background:linear-gradient(180deg,#B5F3CF,#7BD9A6);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.8);opacity:{{ sendOp }};transition:opacity .25s"><svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.arrowUp }}"></path></svg></div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- GUIDES -->
+<sc-if value="{{ isGuides }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:5;overflow-y:auto;scrollbar-width:none;padding:64px 18px 130px;animation:vIn .55s ease both;display:flex;flex-direction:column;gap:14px">
+  <div style="font-size:36px;font-weight:700;letter-spacing:-.03em;padding:14px 4px 2px">Field Guides</div>
+  <div style="height:48px;border-radius:24px;display:flex;align-items:center;gap:10px;padding:0 16px;background:linear-gradient(150deg,rgba(255,255,255,.16),rgba(255,255,255,.05));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 22px rgba(0,0,0,.22);border:.5px solid rgba(255,255,255,.13);color:rgba(226,240,233,.6);flex:none">
+    <svg width="19" height="19" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.search }}"></path></svg>
+    <input value="{{ q }}" onChange="{{ onQ }}" placeholder="Search offline guides" style="flex:1;min-width:0;background:transparent;border:0;outline:0;color:#F1F8F4;font-size:17px;font-family:inherit"></input>
+  </div>
+  <div style="display:flex;gap:8px;flex:none;overflow-x:auto;scrollbar-width:none">
+    <sc-for list="{{ cats }}" as="c" hint-placeholder-count="4">
+      <div onClick="{{ c.go }}" style="cursor:pointer;flex:none;padding:8px 16px;border-radius:999px;font-size:14.5px;font-weight:700;background:{{ c.bg }};color:{{ c.fg }};box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 0 0 .5px rgba(255,255,255,.14);transition:all .35s cubic-bezier(.3,1.3,.5,1)">{{ c.label }}</div>
+    </sc-for>
+  </div>
+  <sc-for list="{{ guideList }}" as="g" hint-placeholder-count="5">
+    <div onClick="{{ g.open }}" style="cursor:pointer;flex:none;display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:28px;background:linear-gradient(150deg,rgba(255,255,255,.16),rgba(255,255,255,.05));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 10px 26px rgba(0,0,0,.24);border:.5px solid rgba(255,255,255,.13);transition:transform .25s cubic-bezier(.3,1.4,.5,1)" style-active="transform:scale(.97)">
+      <div style="width:50px;height:50px;border-radius:17px;display:flex;align-items:center;justify-content:center;background:{{ g.tint }};color:{{ g.color }}"><svg width="25" height="25" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round"><path d="{{ g.d }}"></path></svg></div>
+      <div style="flex:1;min-width:0"><div style="font-size:17px;font-weight:700;letter-spacing:-.01em">{{ g.title }}</div><div style="font-size:13.5px;color:rgba(226,240,233,.6);margin-top:1px">{{ g.sub }}</div></div>
+      <div style="display:flex;align-items:center;gap:2px;font-size:13px;color:rgba(226,240,233,.55)">{{ g.mins }}<svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.chevR }}"></path></svg></div>
+    </div>
+  </sc-for>
+  <sc-if value="{{ noGuides }}" hint-placeholder-val="{{ false }}"><div style="text-align:center;padding:40px 0;color:rgba(226,240,233,.55);font-size:16px">No guides match "{{ q }}"</div></sc-if>
+</div>
+</sc-if>
+
+<!-- TOOLKIT -->
+<sc-if value="{{ isTools }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:5;overflow-y:auto;scrollbar-width:none;padding:64px 18px 130px;animation:vIn .55s ease both;display:flex;flex-direction:column;gap:14px">
+  <div style="font-size:36px;font-weight:700;letter-spacing:-.03em;padding:14px 4px 2px">Toolkit</div>
+  <div style="flex:none;border-radius:34px;padding:22px 18px 20px;display:flex;flex-direction:column;align-items:center;gap:14px;background:linear-gradient(150deg,rgba(255,255,255,.17),rgba(255,255,255,.05));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 12px 32px rgba(0,0,0,.28);border:.5px solid rgba(255,255,255,.15)">
+    <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:44px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums">{{ headingText }}°</div><div style="font-size:22px;font-weight:600;color:#FFB65C">{{ cardinal }}</div></div>
+    <div style="position:relative;width:236px;height:236px">
+      <div style="position:absolute;top:-8px;left:50%;margin-left:-8px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid #FFB65C;z-index:3;filter:drop-shadow(0 0 6px rgba(255,182,92,.7))"></div>
+      <div style="position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 35% 25%,rgba(255,255,255,.14),rgba(255,255,255,.02) 60%);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 0 30px rgba(143,227,181,.1),0 10px 30px rgba(0,0,0,.3);transform:rotate({{ dialRot }}deg);transition:transform .14s linear">
+        <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="72">
+          <div style="position:absolute;left:50%;top:5px;width:{{ t.w }}px;margin-left:-.75px;height:{{ t.h }}px;background:{{ t.c }};transform-origin:50% 113px;transform:rotate({{ t.r }}deg)"></div>
+        </sc-for>
+        <sc-for list="{{ dirs }}" as="d" hint-placeholder-count="4">
+          <div style="position:absolute;inset:0;transform:rotate({{ d.r }}deg)"><div style="position:absolute;top:26px;left:50%;width:30px;margin-left:-15px;text-align:center;font-size:20px;font-weight:700;color:{{ d.c }}">{{ d.l }}</div></div>
+        </sc-for>
+      </div>
+      <div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#FFB65C;box-shadow:0 0 12px #FFB65C"></div>
+    </div>
+    <div style="font-size:13px;color:rgba(226,240,233,.6);text-align:center;white-space:nowrap">Magnetic north · GPS off</div>
+  </div>
+  <div style="flex:none;border-radius:30px;padding:6px 18px;background:linear-gradient(150deg,rgba(255,255,255,.15),rgba(255,255,255,.05));backdrop-filter:blur(28px) saturate(170%);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 10px 26px rgba(0,0,0,.24);border:.5px solid rgba(255,255,255,.13)">
+    <sc-for list="{{ toolRows }}" as="r" hint-placeholder-count="4">
+      <div onClick="{{ r.tap }}" style="cursor:pointer;display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:{{ r.line }}">
+        <div style="width:38px;height:38px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:{{ r.tint }};color:{{ r.color }}"><svg width="21" height="21" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round"><path d="{{ r.d }}"></path></svg></div>
+        <div style="flex:1"><div style="font-size:16.5px;font-weight:600">{{ r.title }}</div><div style="font-size:13px;color:rgba(226,240,233,.58)">{{ r.sub }}</div></div>
+        <div style="width:51px;height:31px;border-radius:16px;background:{{ r.bg }};position:relative;transition:background .3s"><div style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);transform:translateX({{ r.x }});transition:transform .35s cubic-bezier(.3,1.5,.5,1)"></div></div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showBlur }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:0;height:124px;z-index:30;pointer-events:none"><div style="position:absolute;inset:0;backdrop-filter:blur(1px);mask-image:linear-gradient(to bottom,#000 0%,#000 70%,transparent 100%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(3px);mask-image:linear-gradient(to bottom,#000 0%,#000 50%,transparent 80%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(8px);mask-image:linear-gradient(to bottom,#000 0%,#000 30%,transparent 60%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(18px);mask-image:linear-gradient(to bottom,#000 0%,#000 12%,transparent 40%)"></div><div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(7,28,24,.62),rgba(7,28,24,0))"></div></div><div style="position:absolute;left:0;right:0;bottom:0;height:160px;z-index:30;pointer-events:none"><div style="position:absolute;inset:0;backdrop-filter:blur(1px);mask-image:linear-gradient(to top,#000 0%,#000 70%,transparent 100%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(3px);mask-image:linear-gradient(to top,#000 0%,#000 50%,transparent 80%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(8px);mask-image:linear-gradient(to top,#000 0%,#000 30%,transparent 60%)"></div><div style="position:absolute;inset:0;backdrop-filter:blur(18px);mask-image:linear-gradient(to top,#000 0%,#000 12%,transparent 40%)"></div><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(7,28,24,.7),rgba(7,28,24,0))"></div></div></sc-if>
+<!-- TAB BAR -->
+<sc-if value="{{ showTab }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:16px;bottom:26px;z-index:40;display:flex;gap:12px;animation:vIn .6s ease both">
+  <div style="position:relative;width:290px;height:66px;border-radius:33px;padding:5px;display:flex;background:linear-gradient(150deg,rgba(28,84,72,.72),rgba(8,34,29,.82));backdrop-filter:blur(36px) saturate(190%);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(255,255,255,.08),0 16px 40px rgba(0,0,0,.4);border:.5px solid rgba(255,255,255,.18)">
+    <div style="position:absolute;left:5px;top:5px;width:70px;height:56px;border-radius:28px;background:linear-gradient(150deg,rgba(255,255,255,.34),rgba(255,255,255,.12));box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -1px 2px rgba(255,255,255,.15),0 4px 14px rgba(0,0,0,.25);transform:translateX({{ pillX }}px);transition:transform .55s cubic-bezier(.3,1.35,.45,1)"></div>
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+      <div onClick="{{ t.go }}" style="position:relative;cursor:pointer;width:70px;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:{{ t.color }};transition:color .35s">
+        <svg width="24" height="24" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="{{ t.d }}"></path></svg>
+        <div style="font-size:10.5px;font-weight:700">{{ t.label }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div onClick="{{ openSos }}" style="cursor:pointer;width:66px;height:66px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;letter-spacing:.02em;color:#fff;background:radial-gradient(circle at 35% 25%,rgba(255,150,130,.95),rgba(220,60,45,.9));backdrop-filter:blur(20px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.7),inset 0 -3px 8px rgba(120,10,0,.3),0 12px 32px rgba(255,80,60,.45);transition:transform .25s cubic-bezier(.3,1.4,.5,1)" style-active="transform:scale(.92)">SOS</div>
+</div>
+</sc-if>
+
+<!-- GUIDE SHEET -->
+<sc-if value="{{ sheetGuide }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:60;background:rgba(0,10,8,.4);animation:vIn .3s ease both" onClick="{{ closeSheet }}"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;top:168px;z-index:61;border-radius:44px 44px 0 0;padding:14px 20px 28px;display:flex;flex-direction:column;gap:14px;animation:sheetUp .6s cubic-bezier(.2,1,.3,1) both;background:linear-gradient(170deg,rgba(20,68,58,.88),rgba(6,26,22,.94));backdrop-filter:blur(40px) saturate(180%);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),0 -12px 50px rgba(0,0,0,.4)">
+  <div style="align-self:center;width:38px;height:5px;border-radius:3px;background:rgba(255,255,255,.35)"></div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div style="width:56px;height:56px;border-radius:19px;display:flex;align-items:center;justify-content:center;background:{{ guide.tint }};color:{{ guide.color }}"><svg width="28" height="28" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round"><path d="{{ guide.d }}"></path></svg></div>
+    <div style="flex:1"><div style="font-size:26px;font-weight:700;letter-spacing:-.025em;line-height:1.1">{{ guide.title }}</div><div style="font-size:14px;color:rgba(226,240,233,.62);margin-top:2px">{{ guide.sub }}</div></div>
+    <div onClick="{{ closeSheet }}" style="cursor:pointer;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,rgba(255,255,255,.25),rgba(255,255,255,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.5)"><svg width="18" height="18" viewBox="0 0 24 24" style="fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round"><path d="{{ ic.close }}"></path></svg></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px"><div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden"><div style="width:{{ progress }};height:100%;border-radius:4px;background:linear-gradient(90deg,#7BD9A6,#B5F3CF);box-shadow:0 0 12px rgba(143,227,181,.6);transition:width .5s cubic-bezier(.3,1.2,.5,1)"></div></div><div style="font-size:13px;font-weight:700;color:#8FE3B5;font-variant-numeric:tabular-nums">{{ progressText }}</div></div>
+  <div style="flex:1;overflow-y:auto;scrollbar-width:none;display:flex;flex-direction:column;gap:10px;padding-bottom:6px">
+    <sc-for list="{{ gsteps }}" as="s" hint-placeholder-count="4">
+      <div onClick="{{ s.tap }}" style="cursor:pointer;flex:none;display:flex;gap:14px;align-items:flex-start;padding:15px 16px;border-radius:26px;background:{{ s.bg }};box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 6px 18px rgba(0,0,0,.18);border:.5px solid rgba(255,255,255,.12);transition:all .4s cubic-bezier(.3,1.2,.5,1)">
+        <div style="flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:{{ s.dot }};color:#06251E;font-size:14px;font-weight:700;transition:all .35s cubic-bezier(.3,1.5,.5,1);transform:scale({{ s.sc }})"><sc-if value="{{ s.done }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ic.check }}"></path></svg></sc-if><sc-if value="{{ s.todo }}" hint-placeholder-val="{{ true }}"><span style="color:#fff">{{ s.n }}</span></sc-if></div>
+        <div style="font-size:16.5px;line-height:1.4;opacity:{{ s.op }};text-wrap:pretty">{{ s.text }}</div>
+      </div>
+    </sc-for>
+    <div style="flex:none;padding:14px 16px;border-radius:24px;background:rgba(255,98,80,.14);box-shadow:inset 0 1px 0 rgba(255,150,130,.3);font-size:14.5px;line-height:1.4;color:#FFC3BA"><b style="color:#FF8A7A">Get help if: </b>{{ guide.warn }}</div>
+  </div>
+  <div onClick="{{ openSos }}" style="cursor:pointer;flex:none;height:56px;border-radius:28px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:#fff;background:radial-gradient(circle at 30% 0%,rgba(255,150,130,.95),rgba(220,60,45,.92));box-shadow:inset 0 1.5px 0 rgba(255,255,255,.6),0 10px 28px rgba(255,80,60,.4)">Start SOS beacon</div>
+</div>
+</sc-if>
+
+<!-- PROFILE SHEET -->
+<sc-if value="{{ sheetProfile }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:60;background:rgba(0,10,8,.4);animation:vIn .3s ease both" onClick="{{ closeSheet }}"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;top:58px;z-index:61;border-radius:44px 44px 0 0;padding:14px 20px 28px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;scrollbar-width:none;animation:sheetUp .6s cubic-bezier(.2,1,.3,1) both;background:linear-gradient(170deg,rgba(20,68,58,.88),rgba(6,26,22,.94));backdrop-filter:blur(40px) saturate(180%);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),0 -12px 50px rgba(0,0,0,.4)">
+  <div style="align-self:center;flex:none;width:38px;height:5px;border-radius:3px;background:rgba(255,255,255,.35)"></div>
+  <div style="display:flex;align-items:center;gap:14px;flex:none">
+    <div style="width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#06251E;background:linear-gradient(150deg,#FFD08A,#FFB65C);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.7)">A</div>
+    <div style="flex:1"><div style="font-size:26px;font-weight:700;letter-spacing:-.025em">Aria Nakamura</div><div style="font-size:14px;color:rgba(226,240,233,.62)">Medical ID · shown on lock screen in SOS</div></div>
+    <div onClick="{{ closeSheet }}" style="cursor:pointer;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,rgba(255,255,255,.25),rgba(255,255,255,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.5)"><svg width="18" height="18" viewBox="0 0 24 24" style="fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round"><path d="{{ ic.close }}"></path></svg></div>
+  </div>
+  <div style="flex:none;border-radius:28px;padding:6px 18px;background:linear-gradient(150deg,rgba(255,255,255,.15),rgba(255,255,255,.05));box-shadow:inset 0 1px 0 rgba(255,255,255,.4);border:.5px solid rgba(255,255,255,.12)">
+    <sc-for list="{{ medRows }}" as="r" hint-placeholder-count="4">
+      <div style="display:flex;justify-content:space-between;padding:13px 0;font-size:16px;border-bottom:{{ r.line }}"><span style="color:rgba(226,240,233,.6)">{{ r.k }}</span><span style="font-weight:600">{{ r.v }}</span></div>
+    </sc-for>
+  </div>
+  <div style="flex:none;font-size:20px;font-weight:700;padding:6px 4px 0">Offline packs</div>
+  <div style="flex:none;display:flex;flex-direction:column;gap:10px">
+    <sc-for list="{{ packRows }}" as="p" hint-placeholder-count="3">
+      <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:26px;background:linear-gradient(150deg,rgba(255,255,255,.14),rgba(255,255,255,.05));box-shadow:inset 0 1px 0 rgba(255,255,255,.4);border:.5px solid rgba(255,255,255,.12)">
+        <div style="flex:1"><div style="font-size:16.5px;font-weight:700">{{ p.name }}</div><div style="font-size:13px;color:rgba(226,240,233,.6)">{{ p.size }}</div></div>
+        <div onClick="{{ p.tap }}" style="cursor:pointer;padding:8px 16px;border-radius:999px;font-size:14px;font-weight:700;background:{{ p.bg }};color:{{ p.fg }};box-shadow:inset 0 1px 0 rgba(255,255,255,.4);transition:all .35s">{{ p.btn }}</div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<!-- SOS SHEET -->
+<sc-if value="{{ sheetSos }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:70;animation:vIn .45s ease both;display:flex;flex-direction:column;align-items:center;padding:74px 24px 40px;background:radial-gradient(600px 500px at 50% 45%,rgba(200,50,38,.55),rgba(30,6,4,.96) 70%);backdrop-filter:blur(30px)">
+  <div onClick="{{ closeSheet }}" style="position:absolute;top:64px;right:20px;cursor:pointer;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,rgba(255,255,255,.25),rgba(255,255,255,.08));box-shadow:inset 0 1px 0 rgba(255,255,255,.5)"><svg width="18" height="18" viewBox="0 0 24 24" style="fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round"><path d="{{ ic.close }}"></path></svg></div>
+  <div style="margin-top:14px;font-size:13px;letter-spacing:.2em;font-weight:700;color:#FF9A8B">{{ sosEyebrow }}</div>
+  <div style="margin-top:8px;font-size:32px;font-weight:700;letter-spacing:-.025em;text-align:center;line-height:1.1">{{ sosTitle }}</div>
+  <div style="margin-top:10px;font-size:16px;line-height:1.42;text-align:center;color:rgba(255,225,220,.8);max-width:320px;text-wrap:balance">{{ sosSub }}</div>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative;width:100%">
+    <sc-if value="{{ sosActive }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;width:230px;height:230px;border-radius:50%;border:2px solid rgba(255,140,120,.8);animation:pulse 2.4s ease-out infinite"></div>
+    <div style="position:absolute;width:230px;height:230px;border-radius:50%;border:2px solid rgba(255,140,120,.8);animation:pulse 2.4s ease-out .8s infinite"></div>
+    <div style="position:absolute;width:230px;height:230px;border-radius:50%;border:2px solid rgba(255,140,120,.8);animation:pulse 2.4s ease-out 1.6s infinite"></div>
+    </sc-if>
+    <div onPointerDown="{{ sosDown }}" onPointerUp="{{ sosUp }}" onPointerLeave="{{ sosUp }}" onPointerCancel="{{ sosUp }}" style="touch-action:none;user-select:none;cursor:pointer;width:236px;height:236px;border-radius:50%;background:conic-gradient(#FFD2CA {{ sosDeg }}deg,rgba(255,255,255,.16) 0deg);display:flex;align-items:center;justify-content:center;transition:transform .3s cubic-bezier(.3,1.4,.5,1);transform:scale({{ sosScale }})">
+      <div style="width:216px;height:216px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:radial-gradient(circle at 35% 25%,rgba(255,160,140,.98),rgba(215,55,42,.95) 65%);box-shadow:inset 0 2px 0 rgba(255,255,255,.7),inset 0 -8px 20px rgba(110,8,0,.4),0 20px 60px rgba(255,70,50,.5)">
+        <div style="font-size:52px;font-weight:800;letter-spacing:.02em">{{ sosBtn }}</div>
+        <div style="font-size:14px;font-weight:600;color:rgba(255,235,230,.9)">{{ sosBtnSub }}</div>
+      </div>
+    </div>
+  </div>
+  <div style="width:100%;display:flex;flex-direction:column;gap:10px">
+    <div style="padding:14px 18px;border-radius:26px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(150deg,rgba(255,255,255,.16),rgba(255,255,255,.05));backdrop-filter:blur(24px);box-shadow:inset 0 1px 0 rgba(255,255,255,.4);border:.5px solid rgba(255,255,255,.12)"><div><div style="font-size:12px;letter-spacing:.1em;font-weight:700;color:#FF9A8B">YOUR POSITION</div><div style="font-size:17px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums">46.8523° N, 121.7603° W</div></div><div style="font-size:14px;color:rgba(255,225,220,.7)">±6 m</div></div>
+    <sc-if value="{{ sosActive }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ sosCancel }}" style="cursor:pointer;height:54px;border-radius:27px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;background:linear-gradient(150deg,rgba(255,255,255,.28),rgba(255,255,255,.1));box-shadow:inset 0 1px 0 rgba(255,255,255,.5)">Cancel beacon</div>
+    </sc-if>
+  </div>
+</div>
+</sc-if>
+
+<!-- status bar + island + home indicator -->
+<div style="position:absolute;left:0;right:0;top:0;height:54px;z-index:100;pointer-events:none;color:#fff">
+  <div style="position:absolute;left:{{ dev.tl }}px;top:{{ dev.tt }}px;font-size:{{ dev.tf }}px;font-weight:600;letter-spacing:-.01em">9:41</div>
+  <div style="position:absolute;right:{{ dev.sr }}px;top:{{ dev.tt }}px;display:flex;align-items:center;gap:6px">
+    <span style="font-size:12px;font-weight:600;opacity:.9">No Service</span>
+    <svg width="27" height="14" viewBox="0 0 27 14"><rect x=".5" y=".5" width="22" height="12" rx="3.6" style="fill:none;stroke:#fff;opacity:.4"></rect><rect x="2" y="2" width="14" height="9" rx="2.2" style="fill:#fff"></rect><path d="M24.5 4.5v4c.9-.3 1.5-1.1 1.5-2s-.6-1.7-1.5-2z" style="fill:#fff;opacity:.45"></path></svg>
+  </div>
+</div>
+<div style="position:absolute;left:50%;top:{{ dev.it }}px;width:{{ dev.iw }}px;height:{{ dev.ih }}px;margin-left:{{ dev.im }}px;border-radius:20px;background:#000;z-index:101"></div>
+<div style="position:absolute;left:50%;bottom:{{ dev.hb }}px;width:{{ dev.hw }}px;height:5px;margin-left:{{ dev.hm }}px;border-radius:3px;background:rgba(255,255,255,.85);z-index:101;pointer-events:none"></div>
+
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showGuide&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;device&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ios&quot;,&quot;android&quot;],&quot;default&quot;:&quot;ios&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Preview&quot;}}">
+class Component extends DCLogic {
+  state = {screen:'splash',step:0,perms:{loc:true,bt:true,notif:false},dl:0,dling:false,sheet:null,guideId:'bleeding',checked:{},
+    chat:[{isAi:true,text:"I'm Vana. I run fully on this phone, so no signal is needed. What's happening?",steps:[]}],
+    input:'',attach:null,typing:false,q:'',cat:'All',heading:42,tools:{whistle:false,strobe:false,saver:true,mirror:false},checkin:true,
+    packs:{cas:true,sie:false,ala:false},sosProg:0,sosActive:false,winW:1200,winH:900};
+  chatRef = React.createRef(); fileRef = React.createRef();
+  ic = {home:"M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",sparkle:"M10.5 3l1.9 5.6L18 10.5l-5.6 1.9L10.5 18l-1.9-5.6L3 10.5l5.6-1.9zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z",
+    cross:"M9 3h6v6h6v6h-6v6H9v-6H3V9h6z",compass:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM15.5 8.5l-2 5-5 2 2-5z",book:"M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM8 7h8M8 11h6",
+    search:"M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",mic:"M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3",arrowUp:"M12 19V5M5 12l7-7 7 7",
+    chevR:"M9 6l6 6-6 6",check:"M5 12.5l4.5 4.5L19 7.5",close:"M6 6l12 12M18 6L6 18",pin:"M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21zM12 7.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
+    bell:"M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4",bt:"M7 7l10 10-5 4V3l5 4L7 17",flame:"M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z",
+    drop:"M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z",snow:"M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9",bone:"M6 6l12 12M4.5 7.5a2 2 0 1 1 3-3M16.5 19.5a2 2 0 1 0 3-3",
+    plus:"M12 5v14M5 12h14",bolt:"M13 3L5 14h6l-1 7 8-11h-6z",warn:"M12 4l9 16H3zM12 10v4M12 17v.5",sun:"M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5",
+    download:"M12 4v11M7 11l5 5 5-5M5 20h14",pulse:"M3 12h4l2-6 4 12 2-6h6",mtn:"M3 19l6-11 4 7 3-4 5 8z",whistle:"M4 10a4 4 0 0 1 4-4h9v5a6 6 0 1 1-6 6",flash:"M9 3h6l-1 6h4l-8 12 1-8H6z",mirror:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 9l8 6"};
+  GUIDES = [
+    {id:'bleeding',title:'Severe bleeding',sub:'Control it in 10 minutes',cat:'Trauma',icon:'drop',tint:'rgba(255,98,80,.2)',color:'#FF8A7A',mins:'4 min',steps:['Call for help or start the SOS beacon before anything else.','Press firmly on the wound with a clean cloth or clothing.','Keep pressure for 10 minutes without lifting to check.','If blood soaks through, add more cloth on top. Do not remove the first layer.','Raise the limb above heart level and keep the person warm.'],warn:'blood spurts, soaks through several layers, or the person turns pale or confused.'},
+    {id:'burns',title:'Burns & scalds',sub:'Cool, cover, protect',cat:'Trauma',icon:'flame',tint:'rgba(255,182,92,.2)',color:'#FFB65C',mins:'3 min',steps:['Move away from the heat source.','Cool with clean running water for 20 minutes.','Remove rings and watches near the burn before swelling.','Cover loosely with a clean non-fluffy dressing or cling film.','Do not pop blisters or apply butter, oil or ice.'],warn:'the burn is larger than your palm, on the face, hands or joints, or looks white or charred.'},
+    {id:'fracture',title:'Fractures & sprains',sub:'Immobilise and evacuate',cat:'Trauma',icon:'bone',tint:'rgba(143,227,181,.2)',color:'#8FE3B5',mins:'6 min',steps:['Keep the person still and support the injured part.','Pad and splint above and below the injury with sticks or a pack frame.','Check feeling, colour and pulse beyond the splint.','Apply cold for 15 minutes if you have it.','Plan a slow, assisted descent or wait for rescue.'],warn:'bone is visible, the limb looks deformed, or fingers and toes turn cold or numb.'},
+    {id:'hypothermia',title:'Hypothermia',sub:'Warm the core first',cat:'Environment',icon:'snow',tint:'rgba(140,200,255,.2)',color:'#8CC8FF',mins:'5 min',steps:['Get out of wind and rain. Insulate from the ground.','Replace wet clothing with dry layers and a hat.','Wrap the torso first. Add a vapour barrier if available.','Give warm sweet drinks only if fully awake.','Do not rub limbs or use direct heat on the skin.'],warn:'shivering stops, speech slurs, or the person becomes drowsy.'},
+    {id:'heat',title:'Dehydration & heat',sub:'Rest, cool, sip',cat:'Environment',icon:'sun',tint:'rgba(255,182,92,.2)',color:'#FFB65C',mins:'3 min',steps:['Move to shade and stop exercising.','Sip water or electrolyte mix in small amounts.','Cool the neck, armpits and groin with wet cloth.','Loosen clothing and fan the person.','Rest until urine is pale and headache clears.'],warn:'the person is confused, stops sweating, or vomits repeatedly.'},
+    {id:'bites',title:'Bites & stings',sub:'Snakes, insects, ticks',cat:'Environment',icon:'warn',tint:'rgba(255,98,80,.2)',color:'#FF8A7A',mins:'4 min',steps:['Move away from the animal and keep calm.','Keep the bitten limb still and at heart level.','Remove rings and tight items near the bite.','Mark the swelling edge with a pen and note the time.','Do not cut, suck or apply a tourniquet.'],warn:'any snake bite, trouble breathing, or swelling of the face or throat.'},
+    {id:'altitude',title:'Altitude sickness',sub:'Headache, nausea, fatigue',cat:'Illness',icon:'mtn',tint:'rgba(143,227,181,.2)',color:'#8FE3B5',mins:'4 min',steps:['Stop ascending and rest.','Drink water and eat light carbohydrates.','Take pain relief for headache if you have it.','Descend 300 to 500 m if symptoms do not ease in a few hours.','Never ascend while symptoms are worsening.'],warn:'confusion, loss of balance, breathlessness at rest, or a wet cough.'}
+  ];
+  REPLIES = [
+    {k:['bleed','cut','blood','wound'],g:'bleeding',text:"That sounds like a bleeding injury. Here is what to do now.",steps:['Press firmly with a clean cloth.','Hold for 10 minutes without lifting.','Raise the limb above your heart.']},
+    {k:['cold','shiver','freez','hypo'],g:'hypothermia',text:"Warmth first. Get out of the wind and rain.",steps:['Swap wet clothes for dry layers.','Insulate from the ground.','Wrap the torso and sip something warm.']},
+    {k:['snake','bite','sting','tick'],g:'bites',text:"Stay calm and still. Movement spreads venom faster.",steps:['Move away from the animal.','Keep the limb still, level with your heart.','Mark the swelling edge and note the time.']},
+    {k:['ankle','broke','fractur','sprain','leg'],g:'fracture',text:"Treat it as a fracture until proven otherwise.",steps:['Keep the leg still and supported.','Splint above and below the injury.','Check toes for colour and feeling.']},
+    {k:['water','thirst','dehydr','heat'],g:'heat',text:"Slow down and cool off before anything else.",steps:['Move to shade and rest.','Sip fluids in small amounts.','Cool your neck and armpits.']},
+    {k:['burn','scald','fire'],g:'burns',text:"Cool the burn straight away.",steps:['Run clean water over it for 20 minutes.','Remove rings and watches nearby.','Cover loosely. Do not pop blisters.']}
+  ];
+  componentDidMount(){
+    this.t0=setTimeout(()=>{ if(this.state.screen==='splash') this.setState({screen:'onb'}); },2900);
+    this.tick=setInterval(()=>{ if(this.state.screen==='tools'){const t=Date.now()/1000; this.setState({heading:42+9*Math.sin(t/1.7)+3*Math.sin(t*3.1)}); }},120);
+    this.onR=()=>this.setState({winW:window.innerWidth,winH:window.innerHeight}); this.onR(); window.addEventListener('resize',this.onR);
+  }
+  componentWillUnmount(){clearTimeout(this.t0);clearInterval(this.tick);clearInterval(this.dlT);clearInterval(this.sosT);window.removeEventListener('resize',this.onR);}
+  pickFile=()=>{const e=this.fileRef.current; if(e) e.click();};
+  onFile=(e)=>{const fl=e.target.files&&e.target.files[0]; if(fl) this.setState({attach:URL.createObjectURL(fl)}); e.target.value='';};
+  componentDidUpdate(){const el=this.chatRef.current; if(el&&this.state.screen==='ask') el.scrollTo({top:1e5,behavior:'smooth'});}
+  go=(screen)=>this.setState({screen,sheet:null});
+  send=(txt)=>{
+    txt=(txt||'').trim(); const img=this.state.attach; if((!txt&&!img)||this.state.typing) return;
+    this.setState(s=>({chat:[...s.chat,{isUser:true,text:txt,img}],input:'',attach:null,typing:true}));
+    setTimeout(()=>{
+      const l=txt.toLowerCase(); const r=(img&&!this.REPLIES.some(r=>r.k.some(k=>l.includes(k))))?{g:'bleeding',text:"Gemma analysed your photo on this device. It looks like an open wound with light bleeding. Here is what to do.",steps:['Rinse with clean water if available.','Press with a clean cloth for 10 minutes.','Cover with a dressing and watch for redness.']}:this.REPLIES.find(r=>r.k.some(k=>l.includes(k)))||{g:null,text:"I can help with that. Tell me who is hurt, what happened, and whether they are awake and breathing.",steps:['Check the scene is safe.','Check they respond and breathe normally.','Tell me the main symptom.']};
+      this.setState(s=>({typing:false,chat:[...s.chat,{isAi:true,text:r.text,steps:r.steps,guide:r.g}]}));
+    },1200);
+  };
+  startDl=()=>{ if(this.state.dling||this.state.dl>=100) return; this.setState({dling:true}); this.dlT=setInterval(()=>{ const n=Math.min(100,this.state.dl+1+Math.floor(Math.random()*3)); this.setState({dl:n,dling:n<100}); if(n>=100) clearInterval(this.dlT); },55); };
+  sosDown=()=>{ if(this.state.sosActive) return; clearInterval(this.sosT); this.sosT=setInterval(()=>{ const p=this.state.sosProg+1.4; if(p>=100){clearInterval(this.sosT);this.setState({sosProg:100,sosActive:true});} else this.setState({sosProg:p}); },25); };
+  sosUp=()=>{ clearInterval(this.sosT); if(!this.state.sosActive&&this.state.sosProg>0) this.setState({sosProg:0}); };
+  sw=(on)=>({bg:on?'#7BD9A6':'rgba(255,255,255,.22)',x:on?'20px':'0px'});
+  renderVals(){
+    const s=this.state, ic=this.ic, ss=s.screen, mint='#8FE3B5';
+    const oi=['splash','onb'].includes(ss), scale=Math.min(1,(s.winH-24)/874,(s.winW-24)/415);
+    const step=s.step;
+    const T=[
+      {e:'AI POWERED',t:'No network. Still not alone.',s:'Vana runs on your phone. Ask about injuries, illness or survival with no signal at all.'},
+      {e:'FIELD FIRST AID',t:'Health guidance, step by step.',s:'Clear first-aid steps you can follow with one hand, in any weather.'},
+      {e:'BE FOUND',t:'Be found. Find your way.',s:'Share a beacon with your contacts. Keep a compass and trip check-ins ready offline.'},
+      {e:'ALMOST THERE',t:'Set up your pack.',s:'Allow a few permissions and save the regional pack so everything works off the grid.'}][step];
+    const dlDone=s.dl>=100;
+    const cta=step<3?'Continue':(dlDone?'Enter Vana Care':(s.dling?'Downloading… '+s.dl+'%':'Download offline pack'));
+    const guide=this.GUIDES.find(g=>g.id===s.guideId);
+    const chk=s.checked[s.guideId]||{}; const done=guide.steps.filter((_,i)=>chk[i]).length;
+    const firstOpen=guide.steps.findIndex((_,i)=>!chk[i]);
+    const qq=s.q.trim().toLowerCase();
+    const list=this.GUIDES.filter(g=>(s.cat==='All'||g.cat===s.cat)&&(!qq||g.title.toLowerCase().includes(qq)||g.sub.toLowerCase().includes(qq)));
+    const openGuide=(id)=>()=>this.setState({guideId:id,sheet:'guide'});
+    const tabDefs=[['home','Home',ic.home],['ask','Vana',ic.sparkle],['guides','Guides',ic.book],['tools','Toolkit',ic.compass]];
+    const tabIdx=tabDefs.findIndex(t=>t[0]===ss);
+    const hd=((s.heading%360)+360)%360, cardinals=['N','NE','E','SE','S','SW','W','NW'];
+    const perm=(k,label,d)=>({label,d,...this.sw(s.perms[k]),tap:()=>this.setState(p=>({perms:{...p.perms,[k]:!p.perms[k]}}))});
+    const toolDefs=[['whistle','Emergency whistle','Three blasts, repeating',ic.whistle,'rgba(143,227,181,.2)',mint],['strobe','Flashlight strobe','SOS pattern on the LED',ic.flash,'rgba(255,182,92,.2)','#FFB65C'],['mirror','Signal mirror guide','Aim assist and sun angle',ic.mirror,'rgba(140,200,255,.2)','#8CC8FF'],['saver','Battery saver','Dims screen, pauses sensors',ic.bolt,'rgba(143,227,181,.2)',mint]];
+    const pk=[['cas','Cascades','2.4 GB'],['sie','Sierra Nevada','3.1 GB'],['ala','Alaska Range','2.8 GB']];
+    const qk=(title,sub,d,tint,color,fn)=>({title,sub,d,tint,color,go:fn});
+    const sosA=s.sosActive;
+    return {
+      dev:(this.props.device==='android')?{r:44,tl:30,tt:16,tf:15,sr:26,it:14,iw:24,ih:24,im:-12,hb:8,hw:108,hm:-54}:{r:58,tl:44,tt:19,tf:17,sr:34,it:11,iw:124,ih:36,im:-62,hb:8,hw:138,hm:-69},
+      showGuide:(this.props.showGuide??true)&&s.winW>=1080, scale, boxW:415*scale, boxH:874*scale, ic,
+      palette:[{name:'Abyss Forest',hex:'#071C18',role:'background'},{name:'Pine Glow',hex:'#2FB58E',role:'ambient light'},{name:'Sage Mint',hex:'#8FE3B5',role:'primary / AI'},{name:'Sunrise Amber',hex:'#FFB65C',role:'warmth / highlight'},{name:'Beacon Coral',hex:'#FF6250',role:'SOS / danger'},{name:'Glacier',hex:'#8CC8FF',role:'cold / info'},{name:'Mist',hex:'#F1F8F4',role:'text'}],
+      jumps:[['splash','Splash'],['onb','Onboarding'],['home','Home'],['ask','Ask Vana'],['guides','Guides'],['tools','Toolkit']].map(([k,l])=>({label:l,bg:ss===k?mint:'rgba(255,255,255,.1)',fg:ss===k?'#06251E':'#F1F8F4',go:()=>this.setState({screen:k,step:k==='onb'?0:s.step,sheet:null})})).concat([{label:'SOS',bg:ss&&s.sheet==='sos'?'#FF6250':'rgba(255,98,80,.25)',fg:'#fff',go:()=>this.setState({screen:'home',sheet:'sos',sosProg:0,sosActive:false})},{label:'Guide detail',bg:'rgba(255,255,255,.1)',fg:'#F1F8F4',go:()=>this.setState({screen:'guides',sheet:'guide'})}]),
+      appBgO:oi?0:1, scapeO:oi?1:0, sunX:['62%','50%','36%','56%'][step], par1:(-step*10)+'px', par2:(-step*24)+'px', par3:(-step*44)+'px',
+      isSplash:ss==='splash', isOnb:ss==='onb', isHome:ss==='home', isAsk:ss==='ask', isGuides:ss==='guides', isTools:ss==='tools',
+      toOnb:()=>this.setState({screen:'onb'}), skipOnb:()=>this.go('home'),
+      step0:step===0, step1:step===1, step2:step===2, step3:step===3,
+      heroTiles:[['Bleeding',ic.drop,'#FF9A8B','5s'],['Burns',ic.flame,'#FFC978','6s'],['Fracture',ic.bone,'#B5F3CF','5.5s'],['Cold',ic.snow,'#BFE0FF','6.5s']].map(([label,d,color,dur])=>({label,d,color,dur})),
+      eyebrow:T.e,title:T.t,sub:T.s,sheetH:step===3?600:452,cta,nextOp:(step===3&&s.dling)?.7:1,
+      dots:[0,1,2,3].map(i=>({w:i===step?28:8,bg:i===step?mint:'rgba(255,255,255,.3)'})),
+      dlDeg:s.dl*3.6, dlText:s.dl+'%',
+      permRows:[perm('loc','Location','M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z'),perm('bt','Bluetooth beacon',ic.bt),perm('notif','Check-in reminders',ic.bell)],
+      next:()=>{ if(step<3) this.setState({step:step+1}); else if(dlDone) this.go('home'); else this.startDl(); },
+      openProfile:()=>this.setState({sheet:'profile'}), goAsk:()=>this.go('ask'),
+      quick:[qk('First aid','7 guides',ic.cross,'rgba(255,98,80,.2)','#FF8A7A',()=>this.setState({screen:'guides',cat:'All'})),qk('Symptom check','Ask Vana',ic.pulse,'rgba(143,227,181,.2)',mint,()=>this.go('ask')),qk('Wildlife','Bites & stings',ic.warn,'rgba(255,182,92,.2)','#FFB65C',openGuide('bites')),qk('Water & cold','Stay hydrated, warm',ic.drop,'rgba(140,200,255,.2)','#8CC8FF',()=>this.setState({screen:'guides',cat:'Environment'}))],
+      checkinBg:this.sw(s.checkin).bg, checkinX:this.sw(s.checkin).x, toggleCheckin:()=>this.setState({checkin:!s.checkin}),
+      chatRef:this.chatRef,
+      fileRef:this.fileRef,pickFile:this.pickFile,onFile:this.onFile,hasAttach:!!s.attach,attachBg:s.attach?'url('+s.attach+')':'none',clearAttach:()=>this.setState({attach:null}),
+      chat:s.chat.map(m=>({...m,hasImg:!!m.img,bgImg:m.img?'url('+m.img+')':'none',hasText:!!m.text,align:m.isUser?'flex-end':'flex-start',hasGuide:!!m.guide,openGuide:openGuide(m.guide),steps:(m.steps||[]).map((t,i)=>({n:i+1,t}))})),
+      typing:s.typing,input:s.input,onInput:e=>this.setState({input:e.target.value}),onKey:e=>{if(e.key==='Enter')this.send(s.input);},sendInput:()=>this.send(s.input),sendOp:(s.input.trim()||s.attach)?1:.55,
+      chips:['Deep cut, bleeding','I feel very cold','Snake bite','Ankle looks broken','Out of water'].map(label=>({label,go:()=>this.send(label)})),
+      q:s.q,onQ:e=>this.setState({q:e.target.value}),
+      cats:['All','Trauma','Environment','Illness'].map(c=>({label:c,bg:s.cat===c?mint:'rgba(255,255,255,.1)',fg:s.cat===c?'#06251E':'#F1F8F4',go:()=>this.setState({cat:c})})),
+      guideList:list.map(g=>({...g,d:ic[g.icon],open:openGuide(g.id)})), noGuides:list.length===0,
+      headingText:Math.round(hd), cardinal:cardinals[Math.round(hd/45)%8], dialRot:-s.heading,
+      ticks:Array.from({length:72},(_,i)=>({r:i*5,w:i%9===0?2.5:1.5,h:i%9===0?16:(i%3===0?10:6),c:i%9===0?'rgba(255,255,255,.95)':'rgba(255,255,255,.4)'})),
+      dirs:[['N',0,'#FF8A7A'],['E',90,'#F1F8F4'],['S',180,'#F1F8F4'],['W',270,'#F1F8F4']].map(([l,r,c])=>({l,r,c})),
+      toolRows:toolDefs.map(([k,title,sub,d,tint,color],i)=>({title,sub,d,tint,color,line:i<3?'.5px solid rgba(255,255,255,.12)':'0',...this.sw(s.tools[k]),tap:()=>this.setState(p=>({tools:{...p.tools,[k]:!p.tools[k]}}))})),
+      showTab:tabIdx>=0&&!s.sheet, showBlur:['home','guides','tools'].includes(ss), pillX:Math.max(0,tabIdx)*70,
+      tabs:tabDefs.map(([k,label,d],i)=>({label,d,color:i===tabIdx?mint:'rgba(241,248,244,.72)',go:()=>this.go(k)})),
+      openSos:()=>this.setState({sheet:'sos',sosProg:0,sosActive:false}), closeSheet:()=>{clearInterval(this.sosT);this.setState({sheet:null});},
+      sheetGuide:s.sheet==='guide', sheetProfile:s.sheet==='profile', sheetSos:s.sheet==='sos',
+      guide:{...guide,d:ic[guide.icon]}, progress:(done/guide.steps.length*100)+'%', progressText:done+' of '+guide.steps.length,
+      gsteps:guide.steps.map((text,i)=>{const d=!!chk[i];return{n:i+1,text,done:d,todo:!d,bg:d?'rgba(143,227,181,.16)':'linear-gradient(150deg,rgba(255,255,255,.14),rgba(255,255,255,.05))',dot:d?mint:(i===firstOpen?'rgba(255,182,92,.9)':'rgba(255,255,255,.2)'),sc:d?1.08:1,op:d?.6:1,tap:()=>this.setState(p=>({checked:{...p.checked,[p.guideId]:{...(p.checked[p.guideId]||{}),[i]:!d}}}))};}),
+      medRows:[['Blood type','O positive'],['Allergies','Penicillin'],['Conditions','Asthma (mild)'],['Emergency contact','Mateo · +1 555 0142']].map(([k,v],i)=>({k,v,line:i<3?'.5px solid rgba(255,255,255,.12)':'0'})),
+      packRows:pk.map(([k,name,size])=>{const on=s.packs[k];return{name,size,btn:on?'Installed':'Download',bg:on?'rgba(143,227,181,.2)':mint,fg:on?mint:'#06251E',tap:()=>this.setState(p=>({packs:{...p.packs,[k]:!p.packs[k]}}))};}),
+      sosActive:sosA, sosDeg:s.sosProg*3.6, sosScale:s.sosProg>0&&!sosA?.96:1, sosDown:this.sosDown, sosUp:this.sosUp, sosCancel:()=>this.setState({sosActive:false,sosProg:0}),
+      sosEyebrow:sosA?'BEACON ACTIVE':'EMERGENCY', sosTitle:sosA?'Stay where you are':'Hold to send SOS',
+      sosSub:sosA?'Broadcasting over Bluetooth and sound. Your position and Medical ID will send to your contacts as soon as a signal returns.':'Press and hold the button for two seconds. Nothing is sent until the ring completes.',
+      sosBtn:sosA?'ON':'SOS', sosBtnSub:sosA?'Broadcasting':'Hold 2 seconds'
+    };
+  }
+}
+</script>
+</body>
+</html>
