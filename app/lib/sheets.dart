@@ -2,7 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'ai/assistant.dart';
+import 'ai/gemma_manager.dart';
+import 'ai/llm.dart';
 import 'data.dart';
+import 'data_i18n.dart';
+import 'screens/offline_ai.dart';
+import 'voice.dart';
 import 'glass.dart';
 import 'state.dart';
 import 'theme.dart';
@@ -58,7 +64,7 @@ class _EmergencySheet extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('GPS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: vc.sub)),
-              Text(app.fmtPos == null ? 'Location unavailable' : '${app.fmtPos} · ${app.posAcc}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+              Text(app.fmtPos == null ? (app.lastKnownLine ?? 'Location unavailable') : '${app.fmtPos} · ${app.posAcc}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
             ])),
           ])),
         ]))),
@@ -94,11 +100,11 @@ class _GuideSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.app, t = app.t, vc = context.vc;
-    final g = guideById(id);
+    final g = localizedGuide(guideById(id), app.lang);
     final chk = app.guideChecked[id] ?? {};
     final done = chk.length, first = List.generate(g.steps.length, (i) => i).firstWhere((i) => !chk.contains(i), orElse: () => -1);
     return SheetFrame(
-      topInset: 168, title: g.title, subtitle: t['source'],
+      topInset: 168, title: g.title, subtitle: 'Protocol v${g.version} · ${g.reviewed ? 'clinician reviewed' : 'draft, not yet clinician reviewed'}',
       leading: Container(width: 56, height: 56, decoration: BoxDecoration(color: toneBg(vc, g.tone), borderRadius: BorderRadius.circular(19)), child: Center(child: VIcon(Ic.byName[g.icon]!, size: 28, color: toneColor(vc, g.tone)))),
       child: Column(children: [
         Row(children: [
@@ -127,7 +133,7 @@ class _GuideSheet extends StatelessWidget {
   }
 }
 
-// ==================================================================== voice (simulated ASR)
+// ==================================================================== voice
 Future<void> openVoice(BuildContext context) => showVSheet(context, (c) => const _VoiceSheet());
 
 class _VoiceSheet extends StatefulWidget {
@@ -137,52 +143,66 @@ class _VoiceSheet extends StatefulWidget {
 }
 
 class _VoiceSheetState extends State<_VoiceSheet> with SingleTickerProviderStateMixin {
-  int listen = 0; // 0 idle, 1 listening, 2 done
-  Timer? _t;
+  final _voice = VoiceService();
+  ListenState listen = ListenState.idle;
+  String heard = '';
   late final AnimationController _wave = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
-  @override
-  void dispose() { _t?.cancel(); _wave.dispose(); super.dispose(); }
 
-  /// Prototype: speech recognition is simulated with a canned phrase per language.
-  /// Replace with an offline ASR (Gemma audio / Vosk / platform recogniser).
-  void _mic() {
-    if (listen == 1) return;
-    setState(() => listen = 1);
-    _t?.cancel();
-    _t = Timer(const Duration(milliseconds: 2200), () { if (mounted) setState(() => listen = 2); });
+  @override
+  void dispose() {
+    _voice.dispose();
+    _wave.dispose();
+    super.dispose();
+  }
+
+  Future<void> _mic() async {
+    if (listen == ListenState.listening) {
+      await _voice.stopListening();
+      return;
+    }
+    setState(() { listen = ListenState.listening; heard = ''; });
+    await _voice.listen(
+      lang: context.app.lang,
+      onText: (s) { if (mounted) setState(() => heard = s); },
+      onDone: (s) { if (mounted) setState(() { heard = s; listen = s.trim().isEmpty ? ListenState.idle : ListenState.done; }); },
+      onUnavailable: () { if (mounted) setState(() => listen = ListenState.unavailable); },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final app = context.app, t = app.t, vc = context.vc;
-    final sample = voiceSamplesOf(app.lang);
+    final on = listen == ListenState.listening;
+    final status = switch (listen) {
+      ListenState.idle => t['tapMic'],
+      ListenState.listening => heard.isEmpty ? t['listening'] : heard,
+      ListenState.done => heard,
+      ListenState.unavailable => 'Voice input is not available. Check the microphone permission and that speech recognition is installed on this phone, or type your question instead.',
+    };
     return SheetFrame(
       topInset: 300, title: t['voice'],
       child: Column(children: [
         Segmented(items: const [('en', 'English'), ('te', 'తెలుగు'), ('hi', 'हिन्दी')], current: app.lang, onChanged: app.setLang),
         SizedBox(height: 110, child: AnimatedBuilder(animation: _wave, builder: (c, _) => Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.center, children: [
           for (int i = 0; i < 21; i++)
-            Container(margin: const EdgeInsets.symmetric(horizontal: 2.5), width: 5, height: listen == 1 ? (18 + ((i * 37) % 62)) * (.35 + .65 * ((i.isEven ? _wave.value : 1 - _wave.value))) : 6, decoration: BoxDecoration(borderRadius: BorderRadius.circular(3), gradient: listen == 1 ? vc.ai : null, color: listen == 1 ? null : vc.hair)),
+            Container(margin: const EdgeInsets.symmetric(horizontal: 2.5), width: 5, height: on ? (18 + ((i * 37) % 62)) * (.35 + .65 * ((i.isEven ? _wave.value : 1 - _wave.value))) : 6, decoration: BoxDecoration(borderRadius: BorderRadius.circular(3), gradient: on ? vc.ai : null, color: on ? null : vc.hair)),
         ]))),
-        Container(constraints: const BoxConstraints(minHeight: 56), alignment: Alignment.center, padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(listen == 0 ? t['tapMic'] : (listen == 1 ? t['listening'] : sample), textAlign: TextAlign.center, style: TextStyle(fontSize: 19, height: 1.35, fontWeight: FontWeight.w600, color: listen == 0 ? vc.sub : vc.tx))),
+        Container(constraints: const BoxConstraints(minHeight: 56), alignment: Alignment.center, padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(status, textAlign: TextAlign.center, style: TextStyle(fontSize: 19, height: 1.35, fontWeight: FontWeight.w600, color: listen == ListenState.idle || (on && heard.isEmpty) ? vc.sub : vc.tx))),
+        if (_voice.usedNetworkFallback && listen != ListenState.idle) Padding(padding: const EdgeInsets.only(top: 6), child: Text('Offline speech pack not installed for this language, so this phone may use the internet to understand your voice.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: vc.amb))),
         const Spacer(),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Tap(onTap: _mic, child: AnimatedScale(scale: listen == 1 ? 1.1 : 1, duration: const Duration(milliseconds: 400), curve: Curves.easeOutBack, child: Semantics(button: true, label: 'Microphone', child: Container(width: 76, height: 76, decoration: BoxDecoration(shape: BoxShape.circle, gradient: listen == 1 ? const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFF97316)]) : vc.ai, boxShadow: [BoxShadow(color: listen == 1 ? const Color(0x80EF4444) : const Color(0x733882F6), blurRadius: 30, offset: const Offset(0, 12))]), child: const Center(child: VIcon(Ic.mic, size: 32, color: Colors.white)))))),
-          if (listen == 2) ...[const SizedBox(width: 16), Flexible(child: Tap(onTap: () { Navigator.pop(context); app.go(Screen.ai); app.send(sample, keywords: 'ankle broke'); }, child: Container(height: 56, padding: const EdgeInsets.symmetric(horizontal: 24), alignment: Alignment.center, decoration: BoxDecoration(gradient: vc.prim, borderRadius: BorderRadius.circular(28)), child: Text(t['send'], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: vc.onprim)))))],
+          Tap(onTap: _mic, child: AnimatedScale(scale: on ? 1.1 : 1, duration: const Duration(milliseconds: 400), curve: Curves.easeOutBack, child: Semantics(button: true, label: 'Microphone', child: Container(width: 76, height: 76, decoration: BoxDecoration(shape: BoxShape.circle, gradient: on ? const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFF97316)]) : vc.ai, boxShadow: [BoxShadow(color: on ? const Color(0x80EF4444) : const Color(0x733882F6), blurRadius: 30, offset: const Offset(0, 12))]), child: const Center(child: VIcon(Ic.mic, size: 32, color: Colors.white)))))),
+          if (listen == ListenState.done) ...[const SizedBox(width: 16), Flexible(child: Tap(onTap: () { Navigator.pop(context); app.go(Screen.ai); app.send(heard); }, child: Container(height: 56, padding: const EdgeInsets.symmetric(horizontal: 24), alignment: Alignment.center, decoration: BoxDecoration(gradient: vc.prim, borderRadius: BorderRadius.circular(28)), child: Text(t['send'], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: vc.onprim)))))],
         ]),
       ]),
     );
   }
 }
 
-String voiceSamplesOf(String l) => const {
-      'en': 'I fell and my ankle hurts a lot',
-      'te': 'నేను పడిపోయాను, నా చీలమండ చాలా నొప్పిగా ఉంది',
-      'hi': 'मैं गिर गया और मेरा टखना बहुत दर्द कर रहा है',
-    }[l]!;
-
 // ==================================================================== vision
 Future<void> openVision(BuildContext context) => showVFull(context, (c) => const _VisionScreen());
+
+enum _Vis { finder, analysing, result, needModel, failed }
 
 class _VisionScreen extends StatefulWidget {
   const _VisionScreen();
@@ -191,16 +211,23 @@ class _VisionScreen extends StatefulWidget {
 }
 
 class _VisionScreenState extends State<_VisionScreen> {
-  int vis = 0; // 0 finder, 1 analysing, 2 result
+  _Vis vis = _Vis.finder;
   String? img;
+  ImageAssessment? result;
 
   Future<void> _capture() async {
     final p = await pickImage(context);
     if (p == null || !mounted) return;
-    setState(() { img = p; vis = 1; });
-    // Prototype: no on-device vision model is wired up yet; result below is scripted.
-    await Future<void>.delayed(const Duration(milliseconds: 1900));
-    if (mounted) setState(() => vis = 2);
+    setState(() { img = p; vis = _Vis.analysing; });
+    final app = context.app;
+    try {
+      final r = await app.assistant!.assessImage(await File(p).readAsBytes(), lang: app.lang);
+      if (mounted) setState(() { result = r; vis = _Vis.result; });
+    } on LlmUnavailable {
+      if (mounted) setState(() => vis = _Vis.needModel);
+    } catch (_) {
+      if (mounted) setState(() => vis = _Vis.failed);
+    }
   }
 
   @override
@@ -209,6 +236,8 @@ class _VisionScreenState extends State<_VisionScreen> {
     final mq = MediaQuery.of(context);
     const white = Colors.white;
     Widget frost(Widget c, {double r = 999}) => Glass(radius: r, blur: 20, gradient: const LinearGradient(colors: [Color.fromRGBO(255, 255, 255, .18), Color.fromRGBO(255, 255, 255, .18)]), border: true, child: c);
+    Widget panel(List<Widget> kids) => Positioned(left: 10, right: 10, bottom: 10 + mq.padding.bottom * .5, child: Glass(radius: 40, gradient: vc.sheet, blur: 40, padding: const EdgeInsets.fromLTRB(20, 22, 20, 20), child: DefaultTextStyle(style: TextStyle(color: vc.tx), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: kids))));
+    final r = result;
     return Theme(
       data: ThemeData(brightness: Brightness.dark),
       child: Material(
@@ -223,7 +252,7 @@ class _VisionScreenState extends State<_VisionScreen> {
               Flexible(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: frost(Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), child: Text('${t['vision']} · Gemma', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)))))),
               const SizedBox(width: 42),
             ])),
-            if (vis == 0) ...[
+            if (vis == _Vis.finder) ...[
               Positioned(left: 44, right: 44, top: mq.padding.top + 130, height: 300, child: CustomPaint(painter: _Corners())),
               Positioned(left: 40, right: 40, top: mq.padding.top + 450, child: Text(t['frame'], textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600))),
               Positioned(left: 0, right: 0, bottom: 56 + mq.padding.bottom, child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
@@ -232,24 +261,44 @@ class _VisionScreenState extends State<_VisionScreen> {
                 const SizedBox(width: 52),
               ])),
             ],
-            if (vis == 1) Positioned.fill(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            if (vis == _Vis.analysing) Positioned.fill(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               const SizedBox(width: 64, height: 64, child: CircularProgressIndicator(strokeWidth: 4, color: Color(0xFF7C9CFF), backgroundColor: Color.fromRGBO(255, 255, 255, .25))),
               const SizedBox(height: 18),
               Text(t['analysing'], style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Text(app.gemma.status == GemmaStatus.loading ? 'Starting Gemma on your phone…' : 'Reading the photo on your phone…', style: const TextStyle(fontSize: 13, color: Color(0xB3FFFFFF))),
             ])),
-            if (vis == 2) Positioned(left: 10, right: 10, bottom: 10 + mq.padding.bottom * .5, child: Glass(radius: 40, gradient: vc.sheet, blur: 40, padding: const EdgeInsets.fromLTRB(20, 22, 20, 20), child: DefaultTextStyle(style: TextStyle(color: vc.tx), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (vis == _Vis.needModel) panel([
+              Text('Gemma is not installed', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Text('Photo analysis runs fully on this phone and needs the Gemma 4 model. Download it once while you have Wi-Fi.', style: TextStyle(fontSize: 15.5, height: 1.4, color: vc.sub)),
+              const SizedBox(height: 16),
+              PrimButton('Set up offline AI', height: 54, fontSize: 16, onTap: () { Navigator.pop(context); openOfflineAi(context); }),
+            ]),
+            if (vis == _Vis.failed) panel([
+              const Text('Could not read the photo', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Text('Something went wrong. Try again, or describe the injury in the chat.', style: TextStyle(fontSize: 15.5, height: 1.4, color: vc.sub)),
+              const SizedBox(height: 16),
+              PrimButton(t['retake'], height: 54, fontSize: 16, onTap: () => setState(() { vis = _Vis.finder; img = null; })),
+            ]),
+            if (vis == _Vis.result && r != null) panel([
               Row(children: [VIcon(Ic.sparkle, size: 14, color: vc.ice, stroke: 2), const SizedBox(width: 8), Text(t['seen'], style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.4, color: vc.ice))]),
               const SizedBox(height: 12),
-              for (final f in const ['A break in the skin about 4 cm long on the forearm.', 'Light, steady bleeding. No spurting seen.', 'Surrounding skin looks red. Dirt may be present.'])
+              if (r.features.isEmpty) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text('I could not make out enough in this photo. Try again in better light, closer to the area, with the phone held steady.', style: const TextStyle(fontSize: 16.5, height: 1.35, fontWeight: FontWeight.w500))),
+              for (final f in r.features)
                 Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(width: 8, height: 8, margin: const EdgeInsets.only(top: 7, right: 12), decoration: const BoxDecoration(shape: BoxShape.circle, color: kSky)), Expanded(child: Text(f, style: const TextStyle(fontSize: 16.5, height: 1.35, fontWeight: FontWeight.w500)))])),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12), decoration: BoxDecoration(color: vc.ambbg, borderRadius: BorderRadius.circular(18)), child: Text.rich(TextSpan(style: const TextStyle(fontSize: 14, height: 1.4), children: [TextSpan(text: '${t['uncertain']} ', style: TextStyle(fontWeight: FontWeight.w700, color: vc.amb)), TextSpan(text: '${t['visNote']} Demo result: the on-device vision model is not connected yet, so this text is not based on your photo.')]))),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12), decoration: BoxDecoration(color: vc.ambbg, borderRadius: BorderRadius.circular(18)), child: Text.rich(TextSpan(style: const TextStyle(fontSize: 14, height: 1.4), children: [
+                TextSpan(text: '${t['uncertain']} ', style: TextStyle(fontWeight: FontWeight.w700, color: vc.amb)),
+                TextSpan(text: '${t['visNote']}${r.quality == 'good' ? '' : ' The photo is not very clear.'}${r.cannotTell.isEmpty ? '' : ' Cannot judge from a photo: ${r.cannotTell.join(', ')}.'}'),
+              ]))),
+              if (r.urgentSigns) Padding(padding: const EdgeInsets.only(top: 12), child: AlertButton(t['call112'], height: 52, onTap: app.call112)),
               const SizedBox(height: 12),
               Row(children: [
-                Expanded(child: Tap(onTap: () => setState(() { vis = 0; img = null; }), child: Container(height: 54, alignment: Alignment.center, decoration: BoxDecoration(color: vc.chip, borderRadius: BorderRadius.circular(27)), child: Text(t['retake'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))))),
-                const SizedBox(width: 10),
-                Expanded(flex: 2, child: PrimButton(t['openSteps'], height: 54, fontSize: 16, onTap: () { openGuide(context, 'bleeding'); })),
+                Expanded(child: Tap(onTap: () => setState(() { vis = _Vis.finder; img = null; result = null; }), child: Container(height: 54, alignment: Alignment.center, decoration: BoxDecoration(color: vc.chip, borderRadius: BorderRadius.circular(27)), child: Text(t['retake'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))))),
+                if (r.guideId != null) ...[const SizedBox(width: 10), Expanded(flex: 2, child: PrimButton(t['openSteps'], height: 54, fontSize: 16, onTap: () { openGuide(context, r.guideId!); }))],
               ]),
-            ])))),
+            ]),
           ]),
         ),
       ),
@@ -286,7 +335,14 @@ class _SosScreen extends StatefulWidget {
 class _SosScreenState extends State<_SosScreen> with SingleTickerProviderStateMixin {
   double prog = 0;
   Timer? _t;
-  late final AnimationController _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))..repeat();
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    // Created eagerly: a lazy controller would first be built inside dispose() if the sheet closes before SOS is activated.
+    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))..repeat();
+  }
 
   @override
   void dispose() { _t?.cancel(); _pulse.dispose(); super.dispose(); }
@@ -311,7 +367,7 @@ class _SosScreenState extends State<_SosScreen> with SingleTickerProviderStateMi
     final app = context.app, t = app.t;
     final mq = MediaQuery.of(context);
     final on = app.sosActive;
-    final rows = [('Incident ID', app.incidentId), ('Category', app.emCategory), ('Position', app.fmtPos ?? 'Unavailable'), ('GPS accuracy', app.pos == null ? '—' : app.posAcc), ('Battery', app.batteryPct == null ? '—' : '${app.batteryPct}%'), ('Notify', app.contacts.isEmpty ? 'No contact set' : app.contacts.first.name), ('Status', on ? 'Saved · waiting for signal' : 'Draft')];
+    final rows = [('Incident ID', app.incidentId), ('Category', app.emCategory), ('Position', app.fmtPos ?? app.lastKnownLine ?? 'Unavailable'), ('GPS accuracy', app.pos == null ? '—' : app.posAcc), ('Battery', app.batteryPct == null ? '—' : '${app.batteryPct}%'), ('Notify', app.contacts.isEmpty ? 'No contact set' : app.contacts.first.name), ('Status', on ? 'Saved · waiting for signal' : 'Draft')];
     const soft = Color.fromRGBO(255, 225, 220, .85);
     return Theme(
       data: ThemeData(brightness: Brightness.dark),

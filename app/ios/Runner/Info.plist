@@ -10,6 +10,16 @@
 	<string>Vana Care lets you pick a photo of an injury for the on-device assistant.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Vana Care uses the microphone for voice questions to the assistant.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Vana Care turns your spoken question into text. When an offline language pack is installed this happens on the phone.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Vana Care keeps recording your trail while the screen is off, only during a trip you started.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>tel</string>

@@ -2,18 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:vana_care/core/db.dart';
 import 'package:vana_care/main.dart';
 import 'package:vana_care/sheets.dart';
 import 'package:vana_care/state.dart';
+import 'helpers.dart';
 
 void main() {
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
   testWidgets('onboarding, all tabs, all sheets, contact save', (t) async {
     t.view.physicalSize = const Size(393 * 3, 852 * 3);
     t.view.devicePixelRatio = 3;
     addTearDown(t.view.reset);
     SharedPreferences.setMockInitialValues({});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'), (c) async => null);
-    final st = AppState();
+    final db = await t.runAsync(() => AppDatabase.open(path: inMemoryDatabasePath));
+    final st = AppState(llm: FakeLlm(ready: false), database: db);
     await t.pumpWidget(VanaApp(state: st));
     debugPrint('A');
     await t.runAsync(() => st.init());

@@ -3,9 +3,14 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:geolocator/geolocator.dart';
 import 'package:torch_light/torch_light.dart';
+import '../data/repositories.dart';
 import '../glass.dart';
+import '../maps/mbtiles.dart';
+import 'offline_maps.dart';
 import '../sheets.dart';
 import '../state.dart';
 import '../theme.dart';
@@ -137,14 +142,84 @@ class _TrailMapState extends State<TrailMap> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final app = context.app, vc = context.vc;
+    final region = app.regionHere;
     return Container(
       height: widget.height,
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(30), boxShadow: vc.shadow),
-      child: ClipRRect(borderRadius: BorderRadius.circular(30), child: AnimatedBuilder(
-        animation: _c,
-        builder: (c, _) => CustomPaint(size: Size.infinite, painter: _MapPainter(vc, app.trail, app.pos == null ? null : (app.pos!.latitude, app.pos!.longitude), _c.value)),
-      )),
+      child: ClipRRect(borderRadius: BorderRadius.circular(30), child: Stack(fit: StackFit.expand, children: [
+        if (region != null)
+          _TileMap(key: ValueKey(region.path), region: region)
+        else
+          AnimatedBuilder(
+            animation: _c,
+            builder: (c, _) => CustomPaint(size: Size.infinite, painter: _MapPainter(vc, app.trail, app.pos == null ? null : (app.pos!.latitude, app.pos!.longitude), _c.value)),
+          ),
+        if (region == null)
+          Positioned(left: 12, bottom: 12, child: Tap(onTap: () => openOfflineMaps(context), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), decoration: BoxDecoration(color: vc.solid, borderRadius: BorderRadius.circular(999), border: Border.all(color: vc.glBorder, width: .5)), child: Text('No offline map saved · add one', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: vc.acc))))),
+      ])),
     );
+  }
+}
+
+/// Raster offline map from a downloaded MBTiles region, with the recorded trail and the user's position on top.
+class _TileMap extends StatefulWidget {
+  final OfflineRegion region;
+  const _TileMap({super.key, required this.region});
+  @override
+  State<_TileMap> createState() => _TileMapState();
+}
+
+class _TileMapState extends State<_TileMap> {
+  final _ctl = MapController();
+  MbTilesReader? _reader;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    MbTilesReader.open(widget.region.path).then((r) {
+      if (!mounted) {
+        r.close();
+        return;
+      }
+      setState(() => _reader = r);
+    }).catchError((Object _) {
+      if (mounted) setState(() => _failed = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _reader?.close();
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.app, vc = context.vc, reg = widget.region;
+    if (_failed) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('This map file could not be opened. Remove it and add it again in Offline maps.', textAlign: TextAlign.center, style: TextStyle(color: vc.sub))));
+    final r = _reader;
+    if (r == null) return ColoredBox(color: vc.mapbg);
+    final me = app.pos == null ? null : LatLng(app.pos!.latitude, app.pos!.longitude);
+    final centre = me != null && reg.covers(me.latitude, me.longitude) ? me : LatLng(((reg.minLat ?? 0) + (reg.maxLat ?? 0)) / 2, ((reg.minLon ?? 0) + (reg.maxLon ?? 0)) / 2);
+    final maxZ = (reg.maxZoom ?? 16).toDouble();
+    return Stack(fit: StackFit.expand, children: [
+      FlutterMap(
+        mapController: _ctl,
+        options: MapOptions(initialCenter: centre, initialZoom: math.min(15, maxZ), minZoom: (reg.minZoom ?? 3).toDouble(), maxZoom: maxZ + 1, backgroundColor: vc.mapbg),
+        children: [
+          TileLayer(tileProvider: MbTilesProvider(r), maxNativeZoom: maxZ.toInt(), minNativeZoom: reg.minZoom ?? 0, tileDimension: 256),
+          if (app.trail.length > 1) PolylineLayer(polylines: [Polyline(points: [for (final p in app.trail) LatLng(p.lat, p.lon)], color: vc.amb, strokeWidth: 4)]),
+          MarkerLayer(markers: [
+            if (app.trail.isNotEmpty) Marker(point: LatLng(app.trail.first.lat, app.trail.first.lon), width: 20, height: 20, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, color: vc.solid, border: Border.all(color: vc.acc, width: 3)))),
+            if (me != null) Marker(point: me, width: 24, height: 24, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, color: kSky, border: Border.all(color: Colors.white, width: 3)))),
+          ]),
+        ],
+      ),
+      if (me != null) Positioned(right: 12, bottom: 12, child: Tap(onTap: () => _ctl.move(me, math.max(_ctl.camera.zoom, 14)), child: Container(width: 44, height: 44, decoration: BoxDecoration(color: vc.solid, shape: BoxShape.circle, border: Border.all(color: vc.glBorder, width: .5)), child: Center(child: VIcon(Ic.pin, size: 20, color: vc.acc))))),
+      Positioned(left: 12, bottom: 12, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: vc.solid.withValues(alpha: .9), borderRadius: BorderRadius.circular(999)), child: Text(reg.name, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: vc.sub)))),
+    ]);
   }
 }
 
@@ -213,7 +288,7 @@ class ExploreScreen extends StatelessWidget {
     final km = app.distanceM / 1000;
     return ScrollPage(children: [
       LargeTitle(t['forest']),
-      Padding(padding: const EdgeInsets.only(left: 4, top: 0), child: Text(app.packs['cas'] == true ? 'Cascades pack installed' : 'No regional pack installed', style: TextStyle(fontSize: 15, color: vc.sub))),
+      Padding(padding: const EdgeInsets.only(left: 4, top: 0), child: GestureDetector(onTap: () => openOfflineMaps(context), child: Text(app.offlineRegions.isEmpty ? 'No offline map saved · tap to add' : '${app.offlineRegions.length == 1 ? app.offlineRegions.first.name : '${app.offlineRegions.length} maps'} saved offline', style: TextStyle(fontSize: 15, color: vc.sub)))),
       Glass(radius: 30, padding: const EdgeInsets.all(18), child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(app.recording ? t['tripOn'] : t['tripOff'], style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 1.3, color: vc.acc)),
@@ -248,13 +323,24 @@ class ExploreScreen extends StatelessWidget {
         const SizedBox(width: 14),
         VSwitch(on: app.checkin, onChanged: (v) => app.setCheckin(v)),
       ])),
-      Glass(radius: 28, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14), child: Row(children: [
-        Container(width: 40, height: 40, decoration: BoxDecoration(color: vc.icebg, borderRadius: BorderRadius.circular(14)), child: Center(child: VIcon(Ic.sun, size: 22, color: vc.ice))),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('No forecast saved', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          Text('Live weather needs a connection. Save a forecast snapshot before you go.', style: TextStyle(fontSize: 13, color: vc.sub, height: 1.3)),
-        ])),
+      Glass(radius: 28, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: vc.icebg, borderRadius: BorderRadius.circular(14)), child: Center(child: VIcon(Ic.sun, size: 22, color: vc.ice))),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(app.forecast == null ? 'No forecast saved' : 'Forecast saved ${_ago(app.forecast!.savedAt)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            Text(app.forecast == null ? 'Live weather needs a connection. Save a forecast before you go.' : 'This is a snapshot, not live weather. Conditions can change quickly.', style: TextStyle(fontSize: 13, color: vc.sub, height: 1.3)),
+          ])),
+          Tap(onTap: app.forecastBusy ? null : app.saveForecast, child: Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), decoration: BoxDecoration(color: vc.chip, borderRadius: BorderRadius.circular(999)), child: Text(app.forecastBusy ? '…' : (app.forecast == null ? 'Save' : 'Update'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)))),
+        ]),
+        if (app.forecast != null) ...[
+          const SizedBox(height: 10),
+          for (final d in app.forecast!.days)
+            Padding(padding: const EdgeInsets.only(top: 6), child: Row(children: [
+              SizedBox(width: 92, child: Text(d.date.length >= 10 ? d.date.substring(5) : d.date, style: TextStyle(fontSize: 14, color: vc.sub))),
+              Expanded(child: Text('${d.tMin?.round() ?? '–'}° to ${d.tMax?.round() ?? '–'}°C · rain ${d.rain?.toStringAsFixed(d.rain! >= 10 ? 0 : 1) ?? '–'} mm · wind ${d.wind?.round() ?? '–'} km/h', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+            ])),
+        ],
       ])),
     ]);
   }
@@ -325,7 +411,7 @@ class LostScreen extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(t['lastPos'], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.4, color: Colors.white)),
           const SizedBox(height: 6),
-          Text(app.fmtPos ?? 'Location unavailable', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -.4, color: Colors.white)),
+          Text(app.fmtPos ?? app.lastKnownLine ?? 'Location unavailable', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -.4, color: Colors.white)),
           const SizedBox(height: 4),
           Text(app.pos == null ? 'Allow location access to see your position' : '${app.posAcc} · live GPS', style: const TextStyle(fontSize: 14, color: Colors.white)),
         ]),
@@ -486,4 +572,12 @@ class ToolsScreen extends StatelessWidget {
       ])),
     ]);
   }
+}
+
+String _ago(DateTime t) {
+  final d = DateTime.now().difference(t);
+  if (d.inMinutes < 2) return 'just now';
+  if (d.inHours < 1) return '${d.inMinutes} min ago';
+  if (d.inDays < 1) return '${d.inHours} h ago';
+  return '${d.inDays} d ago';
 }

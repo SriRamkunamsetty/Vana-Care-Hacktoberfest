@@ -1,7 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../ai/gemma_manager.dart';
 import '../data.dart';
+import '../data_i18n.dart';
 import '../glass.dart';
+import 'offline_ai.dart';
+import 'offline_maps.dart';
 import '../sheets.dart';
 import '../state.dart';
 import '../theme.dart';
@@ -42,6 +46,7 @@ class _AiScreenState extends State<AiScreen> {
     if (app.chat.length + (app.typing ? 1 : 0) != _lastCount) { _lastCount = app.chat.length + (app.typing ? 1 : 0); _toEnd(); }
     final chips = <(String, VoidCallback)>[
       ('Scan an injury', () => openVision(context)),
+      ('Save health notes', () => app.saveHealthNotes()),
       for (final s in const ['Deep cut, bleeding', 'I feel very cold', 'Snake bite', 'Ankle looks broken']) (s, () => app.send(s)),
     ];
     return Stack(children: [
@@ -49,6 +54,16 @@ class _AiScreenState extends State<AiScreen> {
         controller: _scroll,
         padding: EdgeInsets.fromLTRB(16, mq.padding.top + 64, 16, 236 + mq.padding.bottom),
         children: [
+          if (app.gemma.installed == null && app.gemma.status != GemmaStatus.unsupported)
+            Padding(padding: const EdgeInsets.only(bottom: 12), child: Tap(onTap: () => openOfflineAi(context), child: Solid(child: Row(children: [
+              Container(width: 40, height: 40, decoration: BoxDecoration(color: vc.icebg, borderRadius: BorderRadius.circular(14)), child: Center(child: VIcon(Ic.sparkle, size: 20, color: vc.ice))),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Turn on the AI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text('Download Gemma 4 once to read photos and answer in your language. First-aid steps already work.', style: TextStyle(fontSize: 13, height: 1.3, color: vc.sub)),
+              ])),
+              VIcon(Ic.chevR, size: 16, color: vc.sub2),
+            ])))),
           for (final m in app.chat) Padding(padding: const EdgeInsets.only(bottom: 12), child: Align(alignment: m.user ? Alignment.centerRight : Alignment.centerLeft, child: m.user ? _UserBubble(m) : _AiBubble(m))),
           if (app.typing) Align(alignment: Alignment.centerLeft, child: Glass(borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24), bottomRight: Radius.circular(24), bottomLeft: Radius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16), child: const _Dots())),
         ],
@@ -57,7 +72,7 @@ class _AiScreenState extends State<AiScreen> {
       Positioned(left: 22, top: mq.padding.top + 10, child: Row(children: [
         const Text('Vana', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -1)),
         const SizedBox(width: 10),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5), decoration: BoxDecoration(color: vc.icebg, borderRadius: BorderRadius.circular(999)), child: Row(children: [VIcon(Ic.bolt, size: 12, color: vc.ice, stroke: 2.4), const SizedBox(width: 6), Text('Gemma · ${t['onDevice']}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: vc.ice))])),
+        Container(padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5), decoration: BoxDecoration(color: vc.icebg, borderRadius: BorderRadius.circular(999)), child: Row(children: [VIcon(Ic.bolt, size: 12, color: vc.ice, stroke: 2.4), const SizedBox(width: 6), Text(app.gemma.installed == null ? 'Guides only' : 'Gemma 4 · ${t['onDevice']}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: vc.ice))])),
       ])),
       if (kb == 0) Positioned(left: 0, right: 0, bottom: 0, child: ProgressiveBlur(top: false, height: 270 + mq.padding.bottom, fade: vc.fade2)),
       Positioned(
@@ -144,7 +159,12 @@ class _AiBubble extends StatelessWidget {
             Expanded(child: Text(m.steps[i], style: const TextStyle(fontSize: 15.5, height: 1.38))),
           ])),
           if (m.guide != null) Padding(padding: const EdgeInsets.only(top: 10), child: Tap(onTap: () => openGuide(context, m.guide!), child: Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), decoration: BoxDecoration(gradient: vc.ai, borderRadius: BorderRadius.circular(999)), child: Row(mainAxisSize: MainAxisSize.min, children: [Text(t['openGuide'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)), const SizedBox(width: 6), const VIcon(Ic.chevR, size: 14, color: Colors.white, stroke: 2.6)])))),
-          if (m.steps.isNotEmpty || m.guide != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(t['aiNote'], style: TextStyle(fontSize: 11.5, color: vc.sub2))),
+          if (m.callEmergency) Padding(padding: const EdgeInsets.only(top: 12), child: AlertButton(t['call112'], height: 50, fontSize: 16, onTap: context.appRead.call112)),
+          if (m.sources.isNotEmpty && !m.streaming) Padding(padding: const EdgeInsets.only(top: 10), child: Text('Source: ${m.sources.first.title} · v${m.sources.first.version} · ${m.sources.first.source.contains('DRAFT') ? 'draft, pending clinician review' : 'reviewed'}', style: TextStyle(fontSize: 11.5, height: 1.3, color: vc.sub2))),
+          if (!m.streaming && m.text.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Row(children: [
+            Expanded(child: Text(m.modelUsed ? 'Gemma on this phone. Not a diagnosis.' : t['aiNote'], style: TextStyle(fontSize: 11.5, color: vc.sub2))),
+            Semantics(button: true, label: 'Read aloud', child: GestureDetector(onTap: () => context.appRead.voice.speak('${m.text} ${m.steps.join('. ')}', context.appRead.lang), child: Padding(padding: const EdgeInsets.all(6), child: Icon(Icons.volume_up_rounded, size: 20, color: vc.sub)))),
+          ])),
         ]),
       ),
     );
@@ -164,7 +184,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget build(BuildContext context) {
     final app = context.app, t = app.t, vc = context.vc;
     final qq = q.trim().toLowerCase();
-    final list = guides.where((g) => (cat == 'All' || g.cat == cat) && (qq.isEmpty || g.title.toLowerCase().contains(qq) || g.sub.toLowerCase().contains(qq))).toList();
+    final list = [for (final g0 in guides) localizedGuide(g0, app.lang)].where((g) => (cat == 'All' || g.cat == cat) && (qq.isEmpty || g.title.toLowerCase().contains(qq) || g.sub.toLowerCase().contains(qq))).toList();
     return ScrollPage(children: [
       LargeTitle(t['library']),
       Glass(height: 48, radius: 24, padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(children: [
@@ -249,12 +269,51 @@ class ProfileScreen extends StatelessWidget {
         switchRow('track', 'Track location on trips', 'Only while a trip is active', false),
         switchRow('photos', 'Include photos in reports', 'Only when you attach them', true),
       ])),
-      SectionTitle(t['packs']),
-      for (final (k, name, size) in const [('cas', 'Cascades', '2.4 GB'), ('sie', 'Sierra Nevada', '3.1 GB'), ('ala', 'Alaska Range', '2.8 GB')])
-        Glass(radius: 26, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700)), Text(size, style: TextStyle(fontSize: 13, color: vc.sub))])),
-          GestureDetector(onTap: () => app.toggleMap(app.packs, k, 'pack'), child: AnimatedContainer(duration: const Duration(milliseconds: 350), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(gradient: app.packs[k]! ? null : vc.prim, color: app.packs[k]! ? vc.accbg : null, borderRadius: BorderRadius.circular(999)), child: Text(app.packs[k]! ? 'Installed' : 'Download', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: app.packs[k]! ? vc.acc : vc.onprim)))),
+      SectionTitle('Offline AI and maps'),
+      GestureDetector(onTap: () => openOfflineAi(context), child: Glass(radius: 26, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), child: Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Gemma 4 on this phone', style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700)),
+          Text(_gemmaLine(app), style: TextStyle(fontSize: 13, color: vc.sub)),
         ])),
+        VIcon(Ic.chevR, size: 16, color: vc.sub2),
+      ]))),
+      GestureDetector(onTap: () => openOfflineMaps(context), child: Glass(radius: 26, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), child: Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Offline maps', style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700)),
+          Text(app.offlineRegions.isEmpty ? 'None saved yet' : '${app.offlineRegions.length} saved on this phone', style: TextStyle(fontSize: 13, color: vc.sub)),
+        ])),
+        VIcon(Ic.chevR, size: 16, color: vc.sub2),
+      ]))),
+      SectionTitle('Your data'),
+      Tap(onTap: () => _confirmDelete(context), child: Container(height: 54, alignment: Alignment.center, decoration: BoxDecoration(color: vc.redbg, borderRadius: BorderRadius.circular(27)), child: Text('Delete all my data', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: vc.red)))),
+      Text('Removes your Medical ID, contacts, emergency reports, trips, health notes and chat from this phone. The AI model and maps stay installed.', style: TextStyle(fontSize: 12.5, height: 1.4, color: vc.sub2)),
     ]);
   }
+}
+
+String _gemmaLine(AppState app) {
+  final g = app.gemma;
+  return switch (g.status) {
+    GemmaStatus.downloading => 'Downloading ${g.progress}%',
+    GemmaStatus.installed || GemmaStatus.loaded || GemmaStatus.loading => '${gemmaSpecs[g.installed!]!.label} installed',
+    GemmaStatus.error => 'Needs attention',
+    GemmaStatus.unsupported => 'Not supported on this phone',
+    _ => 'Not installed · tap to set up',
+  };
+}
+
+Future<void> _confirmDelete(BuildContext context) async {
+  final app = context.appRead;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('Delete all your data?'),
+      content: const Text('This removes your Medical ID, contacts, emergency reports, trips, health notes and chat from this phone. It cannot be undone.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete everything')),
+      ],
+    ),
+  );
+  if (ok == true) await app.deleteAllData();
 }

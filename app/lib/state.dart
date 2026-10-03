@@ -1,15 +1,27 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:battery_plus/battery_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'ai/assistant.dart';
+import 'ai/gemma_manager.dart';
+import 'ai/knowledge.dart';
+import 'ai/llm.dart';
+import 'core/db.dart';
+import 'core/log.dart';
 import 'data.dart';
+import 'data_i18n.dart';
+import 'data/repositories.dart';
 import 'l10n.dart';
+import 'voice.dart';
 
 enum Screen { home, explore, ai, library, profile, map, lost, tools }
 
@@ -55,17 +67,59 @@ class EmergencyEvent {
 
 class ChatMsg {
   final bool user;
-  final String text;
+  String text;
   final String? imagePath;
-  final List<String> steps;
-  final String? guide;
-  const ChatMsg({required this.user, this.text = '', this.imagePath, this.steps = const [], this.guide});
+  List<String> steps;
+  String? guide;
+  List<AssistantSource> sources;
+  bool emergency, callEmergency, modelUsed, streaming;
+  ChatMsg({required this.user, this.text = '', this.imagePath, this.steps = const [], this.guide, this.sources = const [], this.emergency = false, this.callEmergency = false, this.modelUsed = false, this.streaming = false});
 }
 
-class AppState extends ChangeNotifier {
-  AppState({AssistantEngine? assistant, FlutterSecureStorage? secure}) : assistant = assistant ?? ScriptedAssistant(), _secure = secure ?? const FlutterSecureStorage();
+class ForecastDay {
+  final String date;
+  final double? tMax, tMin, rain, wind;
+  const ForecastDay(this.date, this.tMax, this.tMin, this.rain, this.wind);
+  Map<String, dynamic> toJson() => {'d': date, 'x': tMax, 'n': tMin, 'r': rain, 'w': wind};
+  factory ForecastDay.fromJson(Map j) => ForecastDay(j['d'] as String, (j['x'] as num?)?.toDouble(), (j['n'] as num?)?.toDouble(), (j['r'] as num?)?.toDouble(), (j['w'] as num?)?.toDouble());
+}
 
-  final AssistantEngine assistant;
+class Forecast {
+  final DateTime savedAt;
+  final List<ForecastDay> days;
+  const Forecast(this.savedAt, this.days);
+  Map<String, dynamic> toJson() => {'at': savedAt.millisecondsSinceEpoch, 'days': days.map((d) => d.toJson()).toList()};
+  factory Forecast.fromJson(Map j) => Forecast(DateTime.fromMillisecondsSinceEpoch(j['at'] as int), [for (final d in j['days'] as List) ForecastDay.fromJson(d as Map)]);
+
+  factory Forecast.fromOpenMeteo(Map j, DateTime now) {
+    final d = j['daily'] as Map;
+    List l(String k) => (d[k] as List?) ?? const [];
+    final dates = l('time');
+    double? at(String k, int i) => i < l(k).length ? (l(k)[i] as num?)?.toDouble() : null;
+    return Forecast(now, [for (var i = 0; i < dates.length; i++) ForecastDay(dates[i] as String, at('temperature_2m_max', i), at('temperature_2m_min', i), at('precipitation_sum', i), at('wind_speed_10m_max', i))]);
+  }
+}
+
+class AppState extends ChangeNotifier with WidgetsBindingObserver {
+  /// [llm] and [database] are injected by tests. In production Gemma runs through [gemma].
+  AppState({GemmaModelManager? gemma, LlmBackend? llm, AppDatabase? database, FlutterSecureStorage? secure})
+      : gemma = gemma ?? GemmaModelManager(),
+        _llmOverride = llm,
+        _dbOverride = database,
+        _secure = secure ?? const FlutterSecureStorage();
+
+  final GemmaModelManager gemma;
+  final VoiceService voice = VoiceService();
+  final LlmBackend? _llmOverride;
+  final AppDatabase? _dbOverride;
+  AppDatabase? db;
+  KnowledgeBase? kb;
+  VanaAssistant? assistant;
+  TripRepository? trips;
+  HealthSessionRepository? sessions;
+  RegionRepository? regions;
+  int? tripId;
+  List<OfflineRegion> offlineRegions = [];
   final FlutterSecureStorage _secure;
   SharedPreferences? _prefs;
 
@@ -79,7 +133,6 @@ class AppState extends ChangeNotifier {
 
   // Onboarding permissions (what the user opted into; OS prompts happen on finish)
   Map<String, bool> perms = {'loc': true, 'cam': true, 'mic': false};
-  Map<String, bool> packs = {'cas': true, 'sie': false, 'ala': false};
   Map<String, bool> priv = {'sessions': true, 'track': true, 'photos': false};
   Map<String, bool> tools = {'whistle': false, 'strobe': false, 'mirror': false, 'saver': false};
   Map<int, bool> lostChk = {};
@@ -93,6 +146,10 @@ class AppState extends ChangeNotifier {
 
   // Live sensors
   Position? pos;
+
+  /// Last GPS fix, kept across restarts so Lost Mode and reports still have a position without a signal.
+  TrailPoint? lastKnown;
+  int _lastSaved = 0;
   bool locationDenied = false;
   double heading = 0;
   bool hasHeading = false;
@@ -109,7 +166,7 @@ class AppState extends ChangeNotifier {
   DateTime now = DateTime.now();
 
   // Chat
-  final List<ChatMsg> chat = [const ChatMsg(user: false, text: "I'm Vana. I run fully on this phone, so no signal is needed. What's happening?")];
+  final List<ChatMsg> chat = [ChatMsg(user: false, text: "I'm Vana. I run fully on this phone, so no signal is needed. What's happening?")];
   bool typing = false;
   String? attach;
 
@@ -138,13 +195,15 @@ class AppState extends ChangeNotifier {
       lang = p.getString('lang') ?? 'en';
       checkin = p.getBool('checkin') ?? false;
       for (final k in priv.keys) { priv[k] = p.getBool('priv.$k') ?? priv[k]!; }
-      for (final k in packs.keys) { packs[k] = p.getBool('pack.$k') ?? packs[k]!; }
       for (final k in tools.keys) { tools[k] = p.getBool('tool.$k') ?? tools[k]!; }
-      final tr = p.getString('trail');
-      if (tr != null) trail = (jsonDecode(tr) as List).map((e) => TrailPoint.fromJson(e as List)).toList();
-      final ts = p.getInt('tripStart');
-      if (ts != null) tripStart = DateTime.fromMillisecondsSinceEpoch(ts);
-    } catch (_) {}
+      final lk = p.getString('lastKnown');
+      if (lk != null) lastKnown = TrailPoint.fromJson(jsonDecode(lk) as List);
+      final fc = p.getString('forecast');
+      if (fc != null) forecast = Forecast.fromJson(jsonDecode(fc) as Map);
+    } catch (e) {
+      logError('state', e);
+    }
+    await _initData();
     try {
       final raw = await _secure.read(key: 'vana.care.profile');
       if (raw != null) {
@@ -160,8 +219,41 @@ class AppState extends ChangeNotifier {
     refreshBattery();
   }
 
+  /// Opens the database, indexes approved knowledge, restores any unfinished trip and starts Gemma's manager.
+  Future<void> _initData() async {
+    try {
+      db = _dbOverride ?? await AppDatabase.open();
+      trips = TripRepository(db!);
+      sessions = HealthSessionRepository(db!);
+      regions = RegionRepository(db!);
+      kb = KnowledgeBase(db!);
+      await kb!.load();
+      offlineRegions = await regions!.all();
+      final t = await trips!.active();
+      if (t != null) {
+        tripId = t.id;
+        tripStart = t.start;
+        trail = (await trips!.points(t.id)).map((e) => TrailPoint(e.lat, e.lon, e.ts)).toList();
+      }
+    } catch (e, st) {
+      logError('state', e, st);
+    }
+    WidgetsBinding.instance.addObserver(this);
+    final llm = _llmOverride;
+    if (llm == null) {
+      gemma.addListener(notifyListeners);
+      await gemma.init();
+    }
+    if (kb != null) assistant = VanaAssistant(kb: kb!, llm: llm ?? gemma);
+  }
+
+  @override
+  void didHaveMemoryPressure() => gemma.onMemoryPressure();
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (_llmOverride == null) gemma.removeListener(notifyListeners);
     _posSub?.cancel();
     _magSub?.cancel();
     _tripTick?.cancel();
@@ -177,13 +269,6 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> _persistTrip() async {
-    try {
-      await _prefs?.setString('trail', jsonEncode(trail.map((e) => e.toJson()).toList()));
-      if (tripStart != null) await _prefs?.setInt('tripStart', tripStart!.millisecondsSinceEpoch);
-    } catch (_) {}
-  }
-
   void toast(String m) {
     _toastT?.cancel();
     toastMsg = m;
@@ -196,6 +281,7 @@ class AppState extends ChangeNotifier {
   void setLang(String l) { lang = l; _prefs?.setString('lang', l); notifyListeners(); }
   void go(Screen s) {
     screen = s;
+    if (s == Screen.ai) gemma.warmUp();
     _syncCompass();
     notifyListeners();
   }
@@ -242,7 +328,7 @@ class AppState extends ChangeNotifier {
       if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) { locationDenied = true; notifyListeners(); return; }
       locationDenied = false;
-      _posSub = Geolocator.getPositionStream(locationSettings: LocationSettings(accuracy: tools['saver'] == true ? LocationAccuracy.medium : LocationAccuracy.high, distanceFilter: tools['saver'] == true ? 25 : 4)).listen(_onPos, onError: (_) {});
+      _posSub = Geolocator.getPositionStream(locationSettings: _locationSettings()).listen(_onPos, onError: (_) {});
       final last = await Geolocator.getLastKnownPosition();
       if (last != null && pos == null) { pos = last; notifyListeners(); }
     } catch (_) {
@@ -251,13 +337,42 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Battery-conscious tracking: medium accuracy and a wider filter in battery-saver mode.
+  /// While a trip is being recorded Android keeps tracking alive with a foreground service
+  /// (a visible notification) and iOS shows the background-location indicator.
+  LocationSettings _locationSettings() {
+    final saver = tools['saver'] == true;
+    final acc = saver ? LocationAccuracy.medium : LocationAccuracy.high;
+    final filter = saver ? 25 : 4;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: acc,
+        distanceFilter: filter,
+        foregroundNotificationConfig: recording
+            ? const ForegroundNotificationConfig(notificationTitle: 'Vana Care is recording your trail', notificationText: 'Tap to open. Recording uses GPS and battery.', setOngoing: true)
+            : null,
+      );
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return AppleSettings(accuracy: acc, distanceFilter: filter, activityType: ActivityType.fitness, pauseLocationUpdatesAutomatically: true, allowBackgroundLocationUpdates: recording, showBackgroundLocationIndicator: recording);
+    }
+    return LocationSettings(accuracy: acc, distanceFilter: filter);
+  }
+
   void _onPos(Position p) {
     pos = p;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    lastKnown = TrailPoint(p.latitude, p.longitude, nowMs);
+    if (nowMs - _lastSaved > 30000) {
+      _lastSaved = nowMs;
+      _prefs?.setString('lastKnown', jsonEncode(lastKnown!.toJson()));
+    }
     if (recording) {
       final last = trail.isEmpty ? null : trail.last;
       if (last == null || Geolocator.distanceBetween(last.lat, last.lon, p.latitude, p.longitude) >= 4) {
-        trail.add(TrailPoint(p.latitude, p.longitude, DateTime.now().millisecondsSinceEpoch));
-        if (trail.length % 10 == 0) _persistTrip();
+        final ts = DateTime.now().millisecondsSinceEpoch;
+        trail.add(TrailPoint(p.latitude, p.longitude, ts));
+        _savePoint(p.latitude, p.longitude, ts, p.accuracy);
       }
     }
     notifyListeners();
@@ -289,22 +404,53 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------- trip recording
-  void setRecording(bool on) {
+  void _savePoint(double lat, double lon, int ts, double? acc) {
+    final id = tripId;
+    if (id == null || trips == null) return;
+    trips!.addPoint(id, RoutePoint(lat, lon, ts, acc)).catchError((Object e) => logError('trip', e));
+  }
+
+  Future<void> setRecording(bool on) async {
     if (on == recording) return;
     recording = on;
     if (on) {
-      if (trail.isEmpty || tripStart == null) { tripStart = DateTime.now(); trail = []; }
-      if (pos != null && trail.isEmpty) trail.add(TrailPoint(pos!.latitude, pos!.longitude, DateTime.now().millisecondsSinceEpoch));
-      startLocation();
+      if (tripId == null || trail.isEmpty) {
+        final d = DateTime.now();
+        final t = await trips?.start('Trek ${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}');
+        tripId = t?.id;
+        tripStart = t?.start ?? d;
+        trail = [];
+      }
+      if (pos != null && trail.isEmpty) {
+        final ts = DateTime.now().millisecondsSinceEpoch;
+        trail.add(TrailPoint(pos!.latitude, pos!.longitude, ts));
+        _savePoint(pos!.latitude, pos!.longitude, ts, pos!.accuracy);
+      }
       _tripTick = Timer.periodic(const Duration(seconds: 1), (_) { now = DateTime.now(); notifyListeners(); });
     } else {
       _tripTick?.cancel();
-      _persistTrip();
     }
     notifyListeners();
+    await restartLocation(); // switches the foreground-service notification on or off
   }
 
-  void clearTrip() { trail = []; tripStart = null; recording = false; _tripTick?.cancel(); _prefs?.remove('trail'); _prefs?.remove('tripStart'); notifyListeners(); }
+  Future<void> clearTrip() async {
+    final id = tripId;
+    trail = [];
+    tripStart = null;
+    tripId = null;
+    recording = false;
+    _tripTick?.cancel();
+    notifyListeners();
+    if (id != null) {
+      try {
+        await trips?.delete(id);
+      } catch (e) {
+        logError('trip', e);
+      }
+    }
+    await restartLocation();
+  }
 
   double get distanceM {
     var d = 0.0;
@@ -326,14 +472,28 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------- formatting helpers
+  static String _fmt(double lat, double lon) => '${lat.abs().toStringAsFixed(4)}° ${lat >= 0 ? 'N' : 'S'}, ${lon.abs().toStringAsFixed(4)}° ${lon >= 0 ? 'E' : 'W'}';
+
   String? get fmtPos {
     final p = pos;
-    if (p == null) return null;
-    return '${p.latitude.abs().toStringAsFixed(4)}° ${p.latitude >= 0 ? 'N' : 'S'}, ${p.longitude.abs().toStringAsFixed(4)}° ${p.longitude >= 0 ? 'E' : 'W'}';
+    return p == null ? null : _fmt(p.latitude, p.longitude);
+  }
+
+  /// Saved position from an earlier fix, with how old it is. Null when there is a live fix or nothing was ever saved.
+  String? get lastKnownLine {
+    final k = lastKnown;
+    if (pos != null || k == null) return null;
+    final age = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(k.ts));
+    final when = age.inMinutes < 60 ? '${age.inMinutes} min ago' : (age.inHours < 48 ? '${age.inHours} h ago' : '${age.inDays} d ago');
+    return '${_fmt(k.lat, k.lon)} (last known, $when)';
   }
   String _posLine({bool includeLink = false}) {
     final p = pos;
-    if (p == null) return 'Position unavailable.';
+    if (p == null) {
+      final k = lastKnown;
+      if (k == null) return 'Position unavailable.';
+      return 'My last known position: ${_fmt(k.lat, k.lon)}${includeLink ? ' (https://maps.google.com/?q=${k.lat},${k.lon})' : ''}';
+    }
     return 'My position: $fmtPos${includeLink ? ' (https://maps.google.com/?q=${p.latitude},${p.longitude})' : ''}';
   }
   String get posAcc => pos == null ? '' : '±${pos!.accuracy.round()} m';
@@ -418,18 +578,197 @@ class AppState extends ChangeNotifier {
   void cancelSos() { sosActive = false; notifyListeners(); }
 
   // ---------------------------------------------------------------- chat
-  Future<void> send(String text, {String? keywords}) async {
+  List<ChatTurn> get _history => [for (final m in chat.skip(1)) if (m.text.isNotEmpty) ChatTurn(m.user, m.text)];
+
+  Future<void> send(String text) async {
     text = text.trim();
     final img = attach;
     if ((text.isEmpty && img == null) || typing) return;
+    final history = _history;
     chat.add(ChatMsg(user: true, text: text, imagePath: img));
     attach = null;
     typing = true;
     notifyListeners();
-    final r = await assistant.respond(keywords ?? text, hasImage: img != null);
-    typing = false;
-    chat.add(ChatMsg(user: false, text: r.text, steps: r.steps, guide: r.guide));
+    final ai = ChatMsg(user: false, streaming: true);
+    try {
+      if (img != null) {
+        await _answerPhoto(text, img, ai);
+      } else {
+        await _answerText(text, history, ai);
+      }
+    } catch (e, st) {
+      logError('chat', e, st);
+      ai.text = 'Something went wrong on this phone. If this is an emergency, call 112 now.';
+      ai.callEmergency = true;
+    } finally {
+      ai.streaming = false;
+      typing = false;
+      if (!chat.contains(ai)) chat.add(ai);
+      notifyListeners();
+    }
+  }
+
+  Future<void> _answerText(String text, List<ChatTurn> history, ChatMsg ai) async {
+    final a = assistant;
+    if (a == null) {
+      ai.text = 'The assistant is still starting. If this is an emergency, call 112.';
+      ai.callEmergency = true;
+      return;
+    }
+    final r = await a.respond(text, lang: lang, history: history, onPartial: (p) {
+      if (!chat.contains(ai)) chat.add(ai);
+      ai.text = p;
+      typing = false;
+      notifyListeners();
+    });
+    ai
+      ..text = r.text
+      ..steps = (r.emergency && r.guideId != null) ? localizedGuide(guideById(r.guideId!), lang).steps.take(5).toList() : r.steps
+      ..guide = r.guideId
+      ..sources = r.sources
+      ..emergency = r.emergency
+      ..callEmergency = r.callEmergency
+      ..modelUsed = r.modelUsed;
+  }
+
+  Future<void> _answerPhoto(String text, String path, ChatMsg ai) async {
+    final a = assistant;
+    if (a == null) return;
+    try {
+      final bytes = await File(path).readAsBytes();
+      final r = await a.assessImage(bytes, lang: lang, note: text);
+      applyAssessment(ai, r);
+    } on LlmUnavailable {
+      ai.text = 'To look at photos I need Gemma on this phone. Open Profile, then Offline AI, to download it. For now, describe what you see in words and I will help from the approved first-aid guides.';
+    }
+  }
+
+  /// Turns a vision result into a chat answer. Steps come from the approved protocol, not from the model.
+  void applyAssessment(ChatMsg ai, ImageAssessment r) {
+    final b = StringBuffer();
+    if (r.features.isEmpty) {
+      b.write('I could not make out enough in this photo to describe it. Try again in better light, closer to the area, and hold the phone steady.');
+    } else {
+      b.write('In the photo I can see: ${r.features.join('; ')}.');
+      if (r.quality != 'good') b.write(' The photo is not very clear, so please take this with caution.');
+      if (r.cannotTell.isNotEmpty) b.write(' I cannot judge ${r.cannotTell.join(', ')} from a photo.');
+    }
+    b.write(' This is not a diagnosis.');
+    if (r.urgentSigns) b.write(' Urgent signs may be present. Get medical help now.');
+    ai
+      ..text = b.toString()
+      ..guide = r.guideId
+      ..steps = r.guideId == null ? const [] : localizedGuide(guideById(r.guideId!), lang).steps.take(3).toList()
+      ..sources = r.sources
+      ..emergency = r.urgentSigns
+      ..callEmergency = r.urgentSigns
+      ..modelUsed = r.modelUsed;
+  }
+
+  void setAttach(String? p) { attach = p; notifyListeners(); }
+
+  /// Saves the typed symptoms of this conversation as a note a health worker can read. Only when the user allows it.
+  Future<bool> saveHealthNotes() async {
+    if (priv['sessions'] != true || sessions == null) {
+      toast('Turn on "Save health sessions" in Profile first');
+      return false;
+    }
+    final turns = _history;
+    if (!turns.any((t) => t.user)) return false;
+    await sessions!.save(VanaAssistant.healthSummary(turns));
+    toast('Health notes saved on this phone');
+    return true;
+  }
+
+  String get healthNotesText => VanaAssistant.healthSummary(_history);
+
+  // ---------------------------------------------------------------- forecast snapshot
+  /// Last saved forecast (one entry per day), kept so it can be read with no signal.
+  Forecast? forecast;
+  bool forecastBusy = false;
+
+  /// Downloads a 3-day forecast for the current position from Open-Meteo (no account needed) and saves it on the phone.
+  Future<void> saveForecast({http.Client? client}) async {
+    final p = pos;
+    if (p == null) { toast('Waiting for a GPS fix first'); return; }
+    forecastBusy = true;
+    notifyListeners();
+    try {
+      final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
+        'latitude': p.latitude.toStringAsFixed(3),
+        'longitude': p.longitude.toStringAsFixed(3),
+        'daily': 'temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max',
+        'timezone': 'auto',
+        'forecast_days': '3',
+      });
+      final r = await (client ?? http.Client()).get(uri).timeout(const Duration(seconds: 15));
+      if (r.statusCode != 200) throw const HttpException('bad status');
+      final f = Forecast.fromOpenMeteo(jsonDecode(r.body) as Map, DateTime.now());
+      forecast = f;
+      await _prefs?.setString('forecast', jsonEncode(f.toJson()));
+      toast('Forecast saved for offline use');
+    } catch (e) {
+      logError('forecast', e);
+      toast('Could not get the forecast. You need a connection to save one.');
+    } finally {
+      forecastBusy = false;
+      notifyListeners();
+    }
+  }
+
+  // ---------------------------------------------------------------- offline maps & data control
+  Future<void> addRegion(OfflineRegion r) async {
+    await regions?.upsert(r);
+    offlineRegions = await regions?.all() ?? offlineRegions;
     notifyListeners();
   }
-  void setAttach(String? p) { attach = p; notifyListeners(); }
+
+  Future<void> removeRegion(OfflineRegion r) async {
+    await regions?.delete(r.id);
+    try {
+      final f = File(r.path);
+      if (await f.exists()) await f.delete();
+    } catch (e) {
+      logError('region', e);
+    }
+    offlineRegions = await regions?.all() ?? offlineRegions;
+    notifyListeners();
+  }
+
+  OfflineRegion? get regionHere {
+    final p = pos;
+    if (p == null) return offlineRegions.isEmpty ? null : offlineRegions.first;
+    for (final r in offlineRegions) {
+      if (r.covers(p.latitude, p.longitude)) return r;
+    }
+    return null;
+  }
+
+  /// "Delete all my data": profile, contacts, events, trips, health notes, chat and settings. The AI model stays installed.
+  Future<void> deleteAllData() async {
+    await clearTrip();
+    try {
+      await sessions?.deleteAll();
+      await db?.wipe();
+      await _secure.delete(key: 'vana.care.profile');
+      final keep = {'lang', 'theme', 'gemma.installed'};
+      for (final k in (_prefs?.getKeys() ?? <String>{}).where((k) => !keep.contains(k)).toList()) {
+        await _prefs?.remove(k);
+      }
+    } catch (e) {
+      logError('delete', e);
+    }
+    lastKnown = null;
+    profile = const Profile();
+    contacts = [];
+    events = [];
+    chat
+      ..clear()
+      ..add(ChatMsg(user: false, text: "I'm Vana. I run fully on this phone, so no signal is needed. What's happening?"));
+    guideChecked = {};
+    lostChk = {};
+    checkin = false;
+    notifyListeners();
+    toast('All your data was deleted from this phone');
+  }
 }

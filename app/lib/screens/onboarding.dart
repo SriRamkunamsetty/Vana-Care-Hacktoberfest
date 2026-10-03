@@ -1,7 +1,7 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../ai/gemma_manager.dart';
 import '../glass.dart';
 import '../theme.dart';
 import '../ui.dart';
@@ -102,34 +102,38 @@ class OnboardingView extends StatefulWidget {
 
 class OnboardingViewState extends State<OnboardingView> {
   int step = 0;
-  int dl = 0;
-  bool dling = false;
-  Timer? _t;
+  bool _mobile = false;
+
+  /// Real model download progress (0-100). 100 once Gemma is installed.
+  int get dl => context.appRead.gemma.installed != null ? 100 : context.appRead.gemma.progress;
+  bool get dling => context.appRead.gemma.isDownloading;
   static const _steps = [
     ('AI POWERED', 'No network. Still not alone.', 'Vana runs on your phone. Ask about injuries, illness or survival with no signal at all.'),
     ('FIELD FIRST AID', 'Health guidance, step by step.', 'Clear first-aid steps you can follow with one hand, in any weather.'),
     ('HOW IT WORKS', 'Built for safety.', 'Approved protocols come first. The AI explains and never replaces them.'),
-    ('OFFLINE SETUP', 'Set up your pack.', 'Pick a language, allow what you need and save the regional map and guides.'),
+    ('OFFLINE SETUP', 'Set up your phone.', 'Pick a language, allow what you need and download Gemma, the AI that runs on your phone.'),
   ];
 
   @override
-  void dispose() { _t?.cancel(); super.dispose(); }
-
-  /// Prototype behaviour: the pack download is simulated. Replace with a real
-  /// resumable downloader (WorkManager / background_downloader) when packs exist.
-  void _startDl() {
-    if (dling || dl >= 100) return;
-    setState(() => dling = true);
-    _t = Timer.periodic(const Duration(milliseconds: 55), (t) {
-      final n = math.min(100, dl + 1 + (t.tick % 3));
-      setState(() { dl = n; dling = n < 100; });
-      if (n >= 100) t.cancel();
+  void initState() {
+    super.initState();
+    context.appRead.gemma.onMobileData().then((v) {
+      if (mounted) setState(() => _mobile = v);
     });
+  }
+
+  /// Downloads the Gemma 4 variant that suits this phone. The app is fully usable without it.
+  void _startDl() {
+    final g = context.appRead.gemma;
+    final v = g.recommended;
+    if (g.isDownloading || v == null) return;
+    g.install(v);
   }
 
   void _next() {
     if (step < 3) { setState(() => step++); return; }
-    if (dl >= 100) { context.appRead.finishOnboarding(); } else { _startDl(); }
+    final g = context.appRead.gemma;
+    if (g.installed != null || g.recommended == null) { context.appRead.finishOnboarding(); } else { _startDl(); }
   }
 
   ScapeHook get _hook => ScapeHook.of(context);
@@ -141,7 +145,9 @@ class OnboardingViewState extends State<OnboardingView> {
     final (eyebrow, title, sub) = _steps[step];
     WidgetsBinding.instance.addPostFrameCallback((_) => _hook.setStep(step));
     final sheetH = math.min(step == 3 ? 600.0 : 452.0, mq.size.height - 140);
-    final cta = step < 3 ? 'Continue' : (dl >= 100 ? 'Enter Vana Care' : (dling ? 'Downloading… $dl%' : 'Download offline pack'));
+    final g = app.gemma;
+    final gs = g.recommended == null ? null : gemmaSpecs[g.recommended!]!;
+    final cta = step < 3 ? 'Continue' : (dl >= 100 || gs == null ? 'Enter Vana Care' : (dling ? 'Downloading… $dl%' : 'Download offline AI · ${gs.sizeLabel}'));
     return Stack(children: [
       Positioned(top: mq.padding.top + 8, right: 20, child: Tap(onTap: () => context.appRead.finishOnboarding(), child: const _SkipPill())),
       Positioned(top: mq.padding.top + 60, left: 22, right: 22, child: AnimatedSwitcher(duration: const Duration(milliseconds: 500), child: KeyedSubtree(key: ValueKey(step), child: _hero())),),
@@ -173,6 +179,8 @@ class OnboardingViewState extends State<OnboardingView> {
                     Expanded(child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white))),
                     VSwitch(on: app.perms[k]!, onChanged: (_) => app.togglePerm(k)),
                   ])),
+                if (_mobile && g.installed == null && gs != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text('You are on mobile data. The ${gs.sizeLabel} download may cost money. Wi-Fi is recommended.', style: const TextStyle(fontSize: 13, height: 1.35, color: Color(0xFFFFB65C)))),
+                if (g.error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(g.error!, style: const TextStyle(fontSize: 13, height: 1.35, color: Color(0xFFFF9A8B)))),
               ]))) else const Spacer(),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 for (int i = 0; i < 4; i++) AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeOutBack, margin: const EdgeInsets.symmetric(horizontal: 3.5), height: 8, width: i == step ? 28 : 8, decoration: BoxDecoration(color: i == step ? kMint : const Color.fromRGBO(255, 255, 255, .3), borderRadius: BorderRadius.circular(4))),
@@ -221,7 +229,7 @@ class OnboardingViewState extends State<OnboardingView> {
           child: Container(
             width: 124, height: 124,
             decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 40, offset: Offset(0, 16))], gradient: SweepGradient(startAngle: -math.pi / 2, endAngle: 3 * math.pi / 2, colors: [kMint, kMint, const Color.fromRGBO(255, 255, 255, .22), const Color.fromRGBO(255, 255, 255, .22)], stops: [0, dl / 100, dl / 100 + .0001, 1], transform: const GradientRotation(0))),
-            child: Center(child: Container(width: 110, height: 110, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color.fromRGBO(14, 50, 44, .88), Color.fromRGBO(10, 38, 33, .92)])), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text('$dl%', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)), const Text('MAP + GUIDES', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, letterSpacing: .4, color: Color.fromRGBO(226, 240, 233, .75)))]))),
+            child: Center(child: Container(width: 110, height: 110, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color.fromRGBO(14, 50, 44, .88), Color.fromRGBO(10, 38, 33, .92)])), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text('$dl%', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)), const Text('OFFLINE AI', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, letterSpacing: .4, color: Color.fromRGBO(226, 240, 233, .75)))]))),
           ),
         );
     }

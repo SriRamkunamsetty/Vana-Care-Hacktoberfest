@@ -4,7 +4,7 @@ const Map<String, String> _en = {
   'home': 'Home', 'explore': 'Explore', 'ai': 'AI', 'library': 'Library', 'profile': 'Profile',
   'greet': 'Good morning', 'offlineAi': 'Offline · AI ready', 'emMode': 'Emergency Mode',
   'emSub': 'Bleeding, burns, breathing and more', 'askPh': "Ask Vana what's happening…", 'quick': 'Quick help',
-  'firstAid': 'First aid', 'firstAidSub': '9 guides', 'vision': 'Vision assistant', 'visionSub': 'Scan an injury',
+  'firstAid': 'First aid', 'firstAidSub': '10 guides', 'vision': 'Vision assistant', 'visionSub': 'Scan an injury',
   'forest': 'Forest Mode', 'forestSub': 'Trail and map', 'survival': 'Survival toolkit', 'survivalSub': 'Compass and tools',
   'elev': 'Elevation', 'daylight': 'Daylight left', 'battery': 'Battery', 'tripOn': 'TRIP IN PROGRESS',
   'tripOff': 'NO TRIP RECORDING', 'elapsed': 'Elapsed', 'distance': 'Distance', 'record': 'Record trail',

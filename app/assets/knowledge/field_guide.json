@@ -1,0 +1,114 @@
+[
+ {
+  "id": "lost_stop",
+  "title": "Lost in the forest: first steps",
+  "text": "Stay calm and stop moving. Sit down, drink some water and think about when and where you last knew your position. Do not keep walking if it is getting dark or you are tired. Check the Vana Care recorded trail and your last known position. Use a whistle: three blasts is the international distress signal. Staying in one open, visible place usually makes you easier to find. Call 112 if there is any signal.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "lost_shelter",
+  "title": "Shelter and warmth when stranded",
+  "text": "Before dark, find or make shelter out of the wind and rain. Insulate yourself from the ground with leaves, a pack or branches, because the ground drains body heat. Keep dry layers on, wear a hat, and keep your core warm. Do not shelter in a dry river bed, under a lone tall tree in a storm, or at the base of a slope that may slide.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "water_safe",
+  "title": "Safe drinking water",
+  "text": "Unsafe water causes diarrhoea and dehydration. Prefer water from the safest source available. Make it safer by bringing it to a rolling boil for at least one minute, or filter it and then use purification tablets as the label directs. Clear water is not always safe. Do not drink water that smells of chemicals or sits near animal carcasses.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "water_ors",
+  "title": "Diarrhoea and oral rehydration",
+  "text": "With diarrhoea or vomiting the main danger is losing too much fluid. Sip oral rehydration solution (ORS) often in small amounts. Rest. Keep eating light food if possible. Seek medical care urgently if there is blood in the stool, high fever, signs of severe dehydration such as no urine, sunken eyes, extreme drowsiness, or if a child or older person cannot keep fluids down.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "wildlife_big",
+  "title": "Wild animals: elephants, bears and big cats",
+  "text": "Do not approach, feed or corner wild animals. If an elephant or big cat is seen, stay calm, keep distance, do not run, back away slowly and keep out of its path. Make yourself look larger and avoid direct eye contact with predators. Never get between a mother and its young. Keep food sealed and away from sleeping areas. Report encounters to forest staff.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "wildlife_snake",
+  "title": "Preventing snake and insect bites",
+  "text": "Wear closed shoes and long trousers, watch where you step and place your hands, and use a torch at night. Shake out shoes and clothing. Do not pick up or try to kill snakes. If bitten by any snake, keep the person calm and still and get to medical care as fast as possible. Antivenom is only given in hospitals.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "symptom_fever",
+  "title": "Fever and feeling unwell",
+  "text": "A fever with severe headache, stiff neck, confusion, rash, trouble breathing, repeated vomiting or fits needs urgent medical care. In a trek, rest, drink fluids and keep cool. Fever lasting more than three days, or any fever in a baby, an older person or someone who is pregnant should be seen by a health worker. Do not give medicines you have not been advised to take.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "symptom_headache",
+  "title": "Headache and dizziness outdoors",
+  "text": "Headache outdoors is often dehydration, heat, tiredness or altitude. Rest in shade, sip water and eat something light. Seek urgent help for a sudden severe headache, headache after a head injury, confusion, repeated vomiting, weakness on one side, trouble speaking or seeing, or if at high altitude with worsening symptoms.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "symptom_head_injury",
+  "title": "Head injury warning signs",
+  "text": "After a blow to the head, watch the person closely for at least 24 hours. Get urgent help if there is loss of consciousness, repeated vomiting, worsening headache, confusion, unequal pupils, clear fluid from nose or ears, seizures, or unusual sleepiness. Keep the head and neck still if a neck injury is possible and do not move them unless in danger.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "symptom_chest",
+  "title": "Chest pain and breathing difficulty",
+  "text": "Chest pain, pressure in the chest, pain spreading to the arm or jaw, sweating, or severe shortness of breath can be a medical emergency. Call 112 now. Help the person sit in a comfortable position and loosen tight clothing. Stay with them. Be ready to start CPR if they become unresponsive and are not breathing normally.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "rural_pregnancy",
+  "title": "Pregnancy danger signs",
+  "text": "Heavy vaginal bleeding, severe headache or blurred vision, fits, severe belly pain, fever, or reduced baby movement in pregnancy are danger signs. Go to the nearest health facility or call 112 urgently. Do not wait for the symptoms to pass.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "rural_child",
+  "title": "Danger signs in young children",
+  "text": "A child who cannot drink or breastfeed, vomits everything, has had fits, is unusually sleepy or hard to wake, has fast or difficult breathing, or has a stiff neck needs urgent medical care. Keep the child warm, offer frequent small sips of ORS if awake and able to swallow, and travel to the nearest health facility.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "emergency_report",
+  "title": "What to tell emergency services",
+  "text": "When you call 112, state your location first (use the GPS coordinates in Vana Care), the number of people hurt, whether they are awake and breathing, and what happened. Stay on the line and follow the operator's instructions. If there is no signal, move to higher open ground, try again, and send the Vana Care emergency report by SMS because messages can sometimes go through when calls do not.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ },
+ {
+  "id": "compass_basics",
+  "title": "Using the compass and GPS",
+  "text": "Hold the phone flat and away from metal or magnets to read the compass. GPS needs a clear view of the sky and may be inaccurate under dense canopy. The recorded trail shows where you walked and is not a verified path. Do not follow it through unsafe terrain. Rivers, cliffs and steep slopes can make a recorded route unsafe in a different season or weather.",
+  "lang": "en",
+  "source": "Adapted from WHO and standard wilderness-safety guidance. DRAFT: pending clinician review.",
+  "version": "0.1.0"
+ }
+]

@@ -1,25 +1,72 @@
-# CODING AGENTS: READ THIS FIRST
+# Vana Care
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+Offline AI field health and survival companion. Flutter app (Android first, iOS configured) that runs **Gemma 4 on the phone**, with deterministic first-aid protocols, a local knowledge base, GPS trail recording, offline maps and emergency tools. No account, no backend, no cloud inference.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+> Vana Care is an information and decision-support tool. It is not a doctor, not a diagnosis, and not a guaranteed rescue service. See [docs/MEDICAL_REVIEW.md](docs/MEDICAL_REVIEW.md) before any public release.
 
-## What you should do — IMPORTANT
+## Layout
 
-**Read the chat transcripts first.** There are 1 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+| Path | What it is |
+|---|---|
+| `app/` | The Flutter application |
+| `docs/` | Architecture, medical review process, release checklist |
+| `project/`, `chats/` | Original Claude Design handoff (HTML prototype and design conversation). Reference only |
+| `.github/workflows/ci.yml` | Analyze, test, build APKs |
 
-**Read `project/Vana Care v2.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+## Run it
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+```bash
+cd app
+flutter pub get
+flutter test
+flutter run            # Android device, Android 12+ (API 31)
+```
 
-## About the design files
+First launch: onboarding offers to download Gemma 4 (E2B ≈ 2.6 GB, E4B ≈ 3.7 GB, chosen from the phone's RAM). The app is fully usable without it: emergency steps, the library, Forest Mode and SOS never depend on the model.
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+Optional build settings:
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+```bash
+flutter run --dart-define=VANA_REGION_MANIFEST=https://your.host/regions.json   # downloadable map catalogue
+```
 
-## Bundle contents
+## How the AI is wired
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `Vana Care` project files (HTML prototypes, assets, components)
+```
+text / voice / photo
+        │
+  SafetyEngine (rules, EN/HI/TE)  ──► emergency? → protocol steps + Call 112 (never from the model)
+        │
+  KnowledgeBase (BM25 over SQLite) ──► approved protocols + field guide, with source and version
+        │
+  Gemma 4 via LiteRT-LM (on device) ──► plain-language explanation, grounded in the retrieved text
+        │
+  Output validation ──► removes drug doses and definite diagnoses
+        │
+  Reply: text + steps + sources + "not a diagnosis"
+```
+
+Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Status against the blueprint
+
+| Blueprint item | Status |
+|---|---|
+| Local Gemma 4 text assistant (E4B, E2B fallback) | Done. Model manager picks by RAM, GPU→CPU fallback, resumable download |
+| Image assessment (visible features, uncertainty, never diagnoses) | Done. Needs a physical phone to verify quality |
+| Safety engine + reviewed protocols | Engine done. **Protocol content is a draft and has not been clinician-reviewed** |
+| Local RAG with sources | Done (BM25). Vector embeddings are a later upgrade; the DB column exists |
+| Voice in/out (EN/TE/HI) | Done via the phone's recogniser and TTS, offline only if the language pack is installed. Gemma audio input is not used yet |
+| Emergency Mode, SOS report, 112, contacts | Done (opens the dialer/SMS app; the app never claims a rescuer was reached) |
+| GPS, compass, trail recording, Lost Mode | Done. Trail stored in SQLite, foreground service while recording, restored after restart |
+| Offline maps | Done for raster MBTiles (import a file, or download from your own catalogue). No hosted catalogue ships with the app |
+| Weather snapshot | Done (Open-Meteo, saved for offline reading) |
+| Telugu and Hindi | UI strings and all 10 protocols translated. **Translations are unreviewed drafts** |
+| Privacy controls, delete-all-data | Done. Health data in encrypted storage, backups disabled |
+| Room-style database | Done with SQLite (sqflite) |
+| SyncQueue, optional Supabase sync | Not built (blueprint v2) |
+| Measured device benchmarks | Speed-test button is built in. **No benchmark numbers exist yet. Test on real phones** |
+
+## Tests
+
+`flutter test` runs 35 tests: safety rules (EN/HI/TE), retrieval, the assistant pipeline with a fake model (including a model that tries to give drug doses), vision parsing, repositories, app state and a full-UI smoke test. **The Gemma model itself is not exercised by tests**; that needs a device.

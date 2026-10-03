@@ -5,8 +5,16 @@ class Guide {
   final String id, title, sub, cat, icon, mins, warn;
   final List<String> steps;
   final String tone; // red | amb | acc | ice
-  const Guide(this.id, this.title, this.sub, this.cat, this.icon, this.tone, this.mins, this.steps, this.warn);
+
+  /// Content governance (blueprint section 6): every protocol is versioned and linked to a
+  /// source. `reviewed` stays false until a qualified clinician signs the version off.
+  final String version, source;
+  final bool reviewed;
+  const Guide(this.id, this.title, this.sub, this.cat, this.icon, this.tone, this.mins, this.steps, this.warn,
+      {this.version = '0.1.0', this.source = kDraftSource, this.reviewed = false});
 }
+
+const kDraftSource = 'Adapted from WHO Basic Emergency Care and standard first-aid guidance. DRAFT: pending clinician review.';
 
 const guides = <Guide>[
   Guide('bleeding', 'Severe bleeding', 'Control it in 10 minutes', 'First aid', 'drop', 'red', '4 min', [
@@ -84,52 +92,3 @@ const guides = <Guide>[
 Guide guideById(String id) => guides.firstWhere((g) => g.id == id, orElse: () => guides.first);
 
 const libraryCats = ['All', 'First aid', 'Breathing', 'Environment', 'Bites', 'Preparedness'];
-
-class Reply {
-  final List<String> keys;
-  final String? guide;
-  final String text;
-  final List<String> steps;
-  const Reply(this.keys, this.guide, this.text, this.steps);
-}
-
-const replies = <Reply>[
-  Reply(['bleed', 'cut', 'blood', 'wound'], 'bleeding', 'That sounds like a bleeding injury. Here is what to do now.',
-      ['Press firmly with a clean cloth.', 'Hold for 10 minutes without lifting.', 'Raise the limb above your heart.']),
-  Reply(['cold', 'shiver', 'freez', 'hypo'], 'hypothermia', 'Warmth first. Get out of the wind and rain.',
-      ['Swap wet clothes for dry layers.', 'Insulate from the ground.', 'Wrap the torso and sip something warm.']),
-  Reply(['snake', 'bite', 'sting', 'tick'], 'bites', 'Stay calm and still. Movement spreads venom faster.',
-      ['Move away from the animal.', 'Keep the limb still, level with your heart.', 'Mark the swelling edge and note the time.']),
-  Reply(['ankle', 'broke', 'fractur', 'sprain', 'leg'], 'fracture', 'Treat it as a fracture until proven otherwise.',
-      ['Keep the leg still and supported.', 'Splint above and below the injury.', 'Check toes for colour and feeling.']),
-  Reply(['water', 'thirst', 'dehydr', 'heat'], 'heat', 'Slow down and cool off before anything else.',
-      ['Move to shade and rest.', 'Sip fluids in small amounts.', 'Cool your neck and armpits.']),
-  Reply(['burn', 'scald', 'fire'], 'burns', 'Cool the burn straight away.',
-      ['Run clean water over it for 20 minutes.', 'Remove rings and watches nearby.', 'Cover loosely. Do not pop blisters.']),
-];
-
-const photoReply = Reply([], 'bleeding',
-    'Gemma analysed your photo on this device. It looks like an open wound with light bleeding. Here is what to do.',
-    ['Rinse with clean water if available.', 'Press with a clean cloth for 10 minutes.', 'Cover with a dressing and watch for redness.']);
-
-const fallbackReply = Reply([], null,
-    'I can help with that. Tell me who is hurt, what happened, and whether they are awake and breathing.',
-    ['Check the scene is safe.', 'Check they respond and breathe normally.', 'Tell me the main symptom.']);
-
-/// Assistant seam. The prototype uses keyword matching; swap this for an on-device
-/// Gemma (LiteRT) implementation that still routes emergencies through [guides].
-abstract class AssistantEngine {
-  Future<Reply> respond(String text, {bool hasImage = false});
-}
-
-class ScriptedAssistant implements AssistantEngine {
-  @override
-  Future<Reply> respond(String text, {bool hasImage = false}) async {
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    final l = text.toLowerCase();
-    for (final r in replies) {
-      if (r.keys.any(l.contains)) return r;
-    }
-    return hasImage ? photoReply : fallbackReply;
-  }
-}
