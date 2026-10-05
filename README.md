@@ -10,7 +10,6 @@ Offline AI field health and survival companion. Flutter app (Android first, iOS 
 |---|---|
 | `app/` | The Flutter application |
 | `docs/` | Architecture, medical review process, release checklist |
-| `project/`, `chats/` | Original Claude Design handoff (HTML prototype and design conversation). Reference only |
 | `.github/workflows/ci.yml` | Analyze, test, build APKs |
 
 ## Run it
