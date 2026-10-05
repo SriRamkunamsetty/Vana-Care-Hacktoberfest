@@ -68,7 +68,7 @@ class _AiScreenState extends State<AiScreen> {
           if (app.typing) Align(alignment: Alignment.centerLeft, child: Glass(borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24), bottomRight: Radius.circular(24), bottomLeft: Radius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16), child: const _Dots())),
         ],
       ),
-      Positioned(left: 0, right: 0, top: 0, child: ProgressiveBlur(top: true, height: mq.padding.top + 60, fade: vc.fade)),
+      Positioned(left: 0, right: 0, top: 0, child: ProgressiveBlur(top: true, blurred: true, height: mq.padding.top + 60, fade: vc.fade)),
       Positioned(left: 22, top: mq.padding.top + 10, child: Row(children: [
         const Text('Vana', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -1)),
         const SizedBox(width: 10),

@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:math' as math;
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'core/frame_stats.dart';
 import 'glass.dart';
 import 'screens/content.dart';
 import 'screens/field.dart';
@@ -14,6 +13,7 @@ import 'ui.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FrameStats.startIfRequested();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   final state = AppState();
   runApp(VanaApp(state: state));
@@ -69,11 +69,15 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
-class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
+class _ShellState extends State<Shell> {
   Phase phase = Phase.splash;
   int scapeStep = 0;
   Timer? _t;
-  late final AnimationController _drift = AnimationController(vsync: this, duration: const Duration(seconds: 60))..repeat();
+  Screen _lastScreen = Screen.home;
+  int _dir = 1;
+
+  /// Order used to decide which way screens slide. Sub-screens of Explore sit just after it.
+  static double _order(Screen s) => switch (s) { Screen.home => 0, Screen.explore => 1, Screen.map || Screen.lost || Screen.tools => 1.5, Screen.ai => 2, Screen.library => 3, Screen.profile => 4 };
 
   @override
   void initState() {
@@ -82,7 +86,7 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
   }
 
   @override
-  void dispose() { _t?.cancel(); _drift.dispose(); super.dispose(); }
+  void dispose() { _t?.cancel(); super.dispose(); }
 
   void _afterSplash() {
     if (!mounted || phase != Phase.splash) return;
@@ -98,6 +102,10 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
     final oi = phase != Phase.app;
     final mq = MediaQuery.of(context);
     final scr = app.screen;
+    if (scr != _lastScreen) {
+      _dir = _order(scr) >= _order(_lastScreen) ? 1 : -1;
+      _lastScreen = scr;
+    }
     final tabOf = switch (scr) { Screen.map || Screen.lost || Screen.tools => Screen.explore, _ => scr };
     final showBlur = const [Screen.home, Screen.explore, Screen.map, Screen.lost, Screen.library, Screen.profile, Screen.tools].contains(scr);
     final kb = mq.viewInsets.bottom > 0;
@@ -111,15 +119,27 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
           setStep: (s) { if (s != scapeStep) setState(() => scapeStep = s); },
           child: Stack(children: [
             // App backdrop
-            Positioned.fill(child: AnimatedOpacity(duration: const Duration(milliseconds: 900), opacity: oi ? 0 : 1, child: _Backdrop(vc: vc, t: _drift))),
+            Positioned.fill(child: AnimatedOpacity(duration: const Duration(milliseconds: 900), opacity: oi ? 0 : 1, child: _Backdrop(vc: vc, shift: _order(scr)))),
             // Splash/onboarding scape
             Positioned.fill(child: IgnorePointer(child: AnimatedOpacity(duration: const Duration(milliseconds: 900), opacity: oi ? 1 : 0, child: TweenAnimationBuilder<double>(tween: Tween(end: scapeStep.toDouble()), duration: const Duration(milliseconds: 900), curve: Curves.easeOutCubic, builder: (c, v, _) => CustomPaint(painter: ScapePainter(v.round().clamp(0, 3))))))),
             if (phase == Phase.splash) Positioned.fill(child: SplashView(onTap: _afterSplash)),
             if (phase == Phase.onboarding) const Positioned.fill(child: OnboardingView()),
             if (phase == Phase.app) ...[
-              Positioned.fill(child: AnimatedSwitcher(duration: const Duration(milliseconds: 450), switchInCurve: Curves.easeOutCubic, transitionBuilder: (w, a) => FadeTransition(opacity: a, child: SlideTransition(position: Tween(begin: const Offset(0, .02), end: Offset.zero).animate(a), child: w)), child: KeyedSubtree(key: ValueKey(scr), child: _screen(scr)))),
+              Positioned.fill(child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 380),
+                reverseDuration: const Duration(milliseconds: 380),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (w, a) {
+                  // The new screen drifts in from the direction of travel while the old one drifts out the other way.
+                  final incoming = w.key == ValueKey(scr);
+                  final slide = Tween(begin: Offset((incoming ? _dir : -_dir) * .07, 0), end: Offset.zero).animate(a);
+                  return FadeTransition(opacity: a, child: SlideTransition(position: slide, child: w));
+                },
+                child: KeyedSubtree(key: ValueKey(scr), child: RepaintBoundary(child: _screen(scr))),
+              )),
               if (showBlur) ...[
-                Positioned(left: 0, right: 0, top: 0, child: ProgressiveBlur(top: true, height: mq.padding.top + 50, fade: vc.fade)),
+                Positioned(left: 0, right: 0, top: 0, child: ProgressiveBlur(top: true, blurred: true, height: mq.padding.top + 50, fade: vc.fade)),
                 Positioned(left: 0, right: 0, bottom: 0, child: ProgressiveBlur(top: false, height: 160 + mq.padding.bottom, fade: vc.fade2)),
               ],
               if (!kb) Positioned(left: 16, right: 16, bottom: 18 + mq.padding.bottom, child: _TabBar(current: tabOf)),
@@ -143,32 +163,38 @@ class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
       };
 }
 
+/// App background: three soft radial blobs on a gradient. The blobs ease sideways when you change tab
+/// (a little parallax), and are otherwise still, so the GPU is idle between interactions.
 class _Backdrop extends StatelessWidget {
   final VC vc;
-  final Animation<double> t;
-  const _Backdrop({required this.vc, required this.t});
+  final double shift;
+  const _Backdrop({required this.vc, required this.shift});
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    Widget blob(Color c, double o, double d, double x, double y, double ph, double amp) => AnimatedBuilder(
-          animation: t,
-          builder: (_, _) {
-            final a = math.sin((t.value * 60 / d + ph) * 2 * math.pi);
-            return Positioned(left: x + amp * a, top: y + amp * .8 * math.cos((t.value * 60 / d + ph) * 2 * math.pi), child: ImageFiltered(imageFilter: _blur, child: Opacity(opacity: o, child: Container(width: d * 26, height: d * 26, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [c, c.withValues(alpha: 0)], stops: const [0, .68]))))));
-          },
+    Widget blob(Color c, double o, double d, double x, double y, double dx, double dy) => Positioned(
+          left: x + dx,
+          top: y + dy,
+          child: Container(width: d * 26, height: d * 26, decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [c.withValues(alpha: c.a * o), c.withValues(alpha: 0)], stops: const [0, .68]))),
         );
-    return DecoratedBox(
-      decoration: BoxDecoration(gradient: vc.bg),
-      child: ClipRect(child: Stack(children: [
-        blob(vc.b1, vc.bo1, 16, -120, -100, 0, 60),
-        blob(vc.b2, vc.bo2, 20, size.width - 260, size.height * .35, .3, 70),
-        blob(vc.b3, vc.bo3, 18, -60, size.height - 300, .6, 55),
-      ])),
+    return RepaintBoundary(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: shift),
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutCubic,
+        builder: (_, v, _) => DecoratedBox(
+          decoration: BoxDecoration(gradient: vc.bg),
+          child: ClipRect(child: Stack(children: [
+            blob(vc.b1, vc.bo1, 16, -120, -100, -v * 36, v * 14),
+            blob(vc.b2, vc.bo2, 20, size.width - 260, size.height * .35, v * 30, -v * 22),
+            blob(vc.b3, vc.bo3, 18, -60, size.height - 300, -v * 24, v * 18),
+          ])),
+        ),
+      ),
     );
   }
 }
-
-final _blur = ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24);
 
 class _TabBar extends StatelessWidget {
   final Screen current;
@@ -179,7 +205,7 @@ class _TabBar extends StatelessWidget {
     final defs = [(Screen.home, t['home'], Ic.home), (Screen.explore, t['explore'], Ic.compass), (Screen.ai, t['ai'], Ic.sparkle), (Screen.library, t['library'], Ic.book), (Screen.profile, t['profile'], Ic.person)];
     final idx = defs.indexWhere((d) => d.$1 == current);
     return Row(children: [
-      Expanded(child: Glass(height: 66, radius: 33, gradient: vc.tab, blur: 36, padding: const EdgeInsets.all(5), child: LayoutBuilder(builder: (c, box) {
+      Expanded(child: Glass(height: 66, radius: 33, gradient: vc.tab, blur: 18, padding: const EdgeInsets.all(5), child: LayoutBuilder(builder: (c, box) {
         final w = box.maxWidth / 5;
         return Stack(children: [
           AnimatedPositioned(duration: const Duration(milliseconds: 550), curve: Curves.easeOutBack, left: idx * w, top: 0, width: w, height: 54, child: Container(decoration: BoxDecoration(gradient: vc.tabpill, borderRadius: BorderRadius.circular(27)))),

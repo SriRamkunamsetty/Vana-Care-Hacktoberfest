@@ -21,6 +21,32 @@ String fmtDur(Duration d) {
   return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}' : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 }
 
+/// Trip timer. Owns its own once-a-second timer so only this widget rebuilds, not the whole app.
+class ElapsedStat extends StatefulWidget {
+  final double size;
+  final String label;
+  const ElapsedStat({super.key, required this.size, required this.label});
+  @override
+  State<ElapsedStat> createState() => _ElapsedStatState();
+}
+
+class _ElapsedStatState extends State<ElapsedStat> {
+  Timer? _t;
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && context.appRead.recording) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() { _t?.cancel(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => Stat(fmtDur(context.appRead.elapsed), '', widget.label, size: widget.size);
+}
+
 class Stat extends StatelessWidget {
   final String value, unit, label;
   final double size;
@@ -136,7 +162,12 @@ class TrailMap extends StatefulWidget {
 }
 
 class _TrailMapState extends State<TrailMap> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))..repeat();
+  late final AnimationController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))..repeat();
+  }
   @override
   void dispose() { _c.dispose(); super.dispose(); }
   @override
@@ -150,10 +181,10 @@ class _TrailMapState extends State<TrailMap> with SingleTickerProviderStateMixin
         if (region != null)
           _TileMap(key: ValueKey(region.path), region: region)
         else
-          AnimatedBuilder(
-            animation: _c,
-            builder: (c, _) => CustomPaint(size: Size.infinite, painter: _MapPainter(vc, app.trail, app.pos == null ? null : (app.pos!.latitude, app.pos!.longitude), _c.value)),
-          ),
+          Stack(fit: StackFit.expand, children: [
+            RepaintBoundary(child: CustomPaint(size: Size.infinite, painter: _MapPainter(vc, app.trail, app.pos == null ? null : (app.pos!.latitude, app.pos!.longitude)))),
+            if (app.pos != null) RepaintBoundary(child: CustomPaint(size: Size.infinite, painter: _PulsePainter(vc, app.trail, (app.pos!.latitude, app.pos!.longitude), _c))),
+          ]),
         if (region == null)
           Positioned(left: 12, bottom: 12, child: Tap(onTap: () => openOfflineMaps(context), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), decoration: BoxDecoration(color: vc.solid, borderRadius: BorderRadius.circular(999), border: Border.all(color: vc.glBorder, width: .5)), child: Text('No offline map saved · add one', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: vc.acc))))),
       ])),
@@ -223,12 +254,30 @@ class _TileMapState extends State<_TileMap> {
   }
 }
 
+/// Maps lat/lon to canvas points so that the trail and the user's position fit the box. Shared by both map painters.
+Offset Function((double, double))? _mapGeometry(Size size, List<TrailPoint> trail, (double, double)? me) {
+  final pts = <(double, double)>[for (final p in trail) (p.lat, p.lon)];
+  if (me != null) pts.add(me);
+  if (pts.isEmpty) return null;
+  final lat0 = pts.map((e) => e.$1).reduce((a, b) => a + b) / pts.length;
+  final kx = math.cos(lat0 * math.pi / 180);
+  final xs = pts.map((e) => e.$2 * kx), ys = pts.map((e) => -e.$1);
+  var minX = xs.reduce(math.min), maxX = xs.reduce(math.max), minY = ys.reduce(math.min), maxY = ys.reduce(math.max);
+  const minSpan = .0012;
+  if (maxX - minX < minSpan) { final m = (maxX + minX) / 2; minX = m - minSpan / 2; maxX = m + minSpan / 2; }
+  if (maxY - minY < minSpan) { final m = (maxY + minY) / 2; minY = m - minSpan / 2; maxY = m + minSpan / 2; }
+  const pad = 36.0;
+  final sc = math.min((size.width - pad * 2) / (maxX - minX), (size.height - pad * 2) / (maxY - minY));
+  final ox = (size.width - (maxX - minX) * sc) / 2, oy = (size.height - (maxY - minY) * sc) / 2;
+  return ((double, double) p) => Offset(ox + (p.$2 * kx - minX) * sc, oy + (-p.$1 - minY) * sc);
+}
+
+/// The still part of the map: grid rings, recorded trail, start marker and the position dot. Repaints only when data changes.
 class _MapPainter extends CustomPainter {
   final VC vc;
   final List<TrailPoint> trail;
   final (double, double)? me;
-  final double t;
-  _MapPainter(this.vc, this.trail, this.me, this.t);
+  _MapPainter(this.vc, this.trail, this.me);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -237,29 +286,14 @@ class _MapPainter extends CustomPainter {
     for (final (c, step) in [(Offset(size.width * .28, size.height * .62), 16.0), (Offset(size.width * .78, size.height * .26), 22.0)]) {
       for (var r = step; r < size.longestSide; r += step + 1) { canvas.drawCircle(c, r, ring); }
     }
-    final pts = <(double, double)>[for (final p in trail) (p.lat, p.lon)];
-    if (me != null) pts.add(me!);
-    if (pts.isEmpty) return;
-    final lat0 = pts.map((e) => e.$1).reduce((a, b) => a + b) / pts.length;
-    final kx = math.cos(lat0 * math.pi / 180);
-    final xs = pts.map((e) => e.$2 * kx), ys = pts.map((e) => -e.$1);
-    var minX = xs.reduce(math.min), maxX = xs.reduce(math.max), minY = ys.reduce(math.min), maxY = ys.reduce(math.max);
-    const minSpan = .0012;
-    if (maxX - minX < minSpan) { final m = (maxX + minX) / 2; minX = m - minSpan / 2; maxX = m + minSpan / 2; }
-    if (maxY - minY < minSpan) { final m = (maxY + minY) / 2; minY = m - minSpan / 2; maxY = m + minSpan / 2; }
-    const pad = 36.0;
-    final s = math.min((size.width - pad * 2) / (maxX - minX), (size.height - pad * 2) / (maxY - minY));
-    final ox = (size.width - (maxX - minX) * s) / 2, oy = (size.height - (maxY - minY) * s) / 2;
-    Offset o((double, double) p) => Offset(ox + (p.$2 * kx - minX) * s, oy + (-p.$1 - minY) * s);
-
+    final o = _mapGeometry(size, trail, me);
+    if (o == null) return;
     if (trail.length > 1) {
       final path = Path()..moveTo(o((trail.first.lat, trail.first.lon)).dx, o((trail.first.lat, trail.first.lon)).dy);
       for (final p in trail.skip(1)) { final q = o((p.lat, p.lon)); path.lineTo(q.dx, q.dy); }
+      final dash = Paint()..color = vc.amb..style = PaintingStyle.stroke..strokeWidth = 3.5..strokeCap = StrokeCap.round;
       for (final m in path.computeMetrics()) {
-        for (var d = 0.0; d < m.length; d += 9) {
-          final seg = m.extractPath(d, d + 1);
-          canvas.drawPath(seg, Paint()..color = vc.amb..style = PaintingStyle.stroke..strokeWidth = 3.5..strokeCap = StrokeCap.round);
-        }
+        for (var d = 0.0; d < m.length; d += 9) { canvas.drawPath(m.extractPath(d, d + 1), dash); }
       }
     }
     if (trail.isNotEmpty) {
@@ -269,14 +303,32 @@ class _MapPainter extends CustomPainter {
     }
     if (me != null) {
       final p = o(me!);
-      canvas.drawCircle(p, 22 * (.4 + 1.2 * t), Paint()..color = vc.ice.withValues(alpha: .5 * (1 - t)));
       canvas.drawCircle(p, 10, Paint()..color = Colors.white);
       canvas.drawCircle(p, 7, Paint()..color = kSky);
     }
   }
 
   @override
-  bool shouldRepaint(_MapPainter o) => true;
+  bool shouldRepaint(_MapPainter o) => o.trail.length != trail.length || o.me != me || o.vc != vc;
+}
+
+/// Only the expanding ring around the user's position. Cheap enough to animate every frame.
+class _PulsePainter extends CustomPainter {
+  final VC vc;
+  final List<TrailPoint> trail;
+  final (double, double) me;
+  final Animation<double> t;
+  _PulsePainter(this.vc, this.trail, this.me, this.t) : super(repaint: t);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final o = _mapGeometry(size, trail, me);
+    if (o == null) return;
+    canvas.drawCircle(o(me), 22 * (.4 + 1.2 * t.value), Paint()..color = vc.ice.withValues(alpha: .5 * (1 - t.value)));
+  }
+
+  @override
+  bool shouldRepaint(_PulsePainter o) => o.me != me || o.trail.length != trail.length || o.vc != vc;
 }
 
 // ==================================================================== EXPLORE
@@ -296,7 +348,7 @@ class ExploreScreen extends StatelessWidget {
         ]),
         const SizedBox(height: 14),
         Row(children: [
-          Expanded(child: Stat(fmtDur(app.elapsed), '', t['elapsed'], size: 24)),
+          Expanded(child: ElapsedStat(size: 24, label: t['elapsed'])),
           Expanded(child: Stat(km.toStringAsFixed(km < 10 ? 2 : 1), 'km', t['distance'], size: 24)),
           Expanded(child: Stat(app.pos == null ? '—' : '±${app.pos!.accuracy.round()}', 'm', 'GPS', size: 24)),
         ]),
@@ -381,7 +433,7 @@ class MapScreen extends StatelessWidget {
       Glass(radius: 28, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16), child: Row(children: [
         Expanded(child: Stat('${km.toStringAsFixed(2)} km', '', t['distance'], size: 22)),
         Expanded(child: Stat('${app.trail.length}', 'pts', 'Recorded')),
-        Expanded(child: Stat(fmtDur(app.elapsed), '', t['elapsed'], size: 22)),
+        Expanded(child: ElapsedStat(size: 22, label: t['elapsed'])),
       ])),
       PrimButton(t['returnStart'], height: 56, onTap: () {
         final p = app.pos;

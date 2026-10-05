@@ -45,7 +45,7 @@ class VC {
     gl: _lin(const [Color.fromRGBO(255, 255, 255, .18), Color.fromRGBO(255, 255, 255, .05)]),
     prim: _lin([hexA(0xB5F3CF), hexA(0x7BD9A6)], deg: 180), ai: _ai,
     sheet: _lin(const [Color.fromRGBO(18, 62, 54, .94), Color.fromRGBO(8, 20, 30, .97)], deg: 170),
-    tab: _lin(const [Color.fromRGBO(28, 84, 72, .74), Color.fromRGBO(8, 26, 36, .86)]),
+    tab: _lin(const [Color.fromRGBO(28, 84, 72, .86), Color.fromRGBO(8, 26, 36, .94)]),
     tabpill: _lin(const [Color.fromRGBO(255, 255, 255, .34), Color.fromRGBO(255, 255, 255, .12)]),
     bg: _lin([hexA(0x0B2E27), hexA(0x0A1B24), hexA(0x081220)], deg: 170),
     b1: hexA(0x2FB58E), b2: hexA(0xF97316), b3: hexA(0x3882F6), bo1: .5, bo2: .26, bo3: .4,
@@ -64,7 +64,7 @@ class VC {
     gl: _lin(const [Color.fromRGBO(255, 255, 255, .8), Color.fromRGBO(248, 250, 255, .5)]),
     prim: _lin([hexA(0x1E5442), hexA(0x0F2D23)], deg: 180), ai: _ai,
     sheet: _lin(const [Color.fromRGBO(248, 250, 255, .97), Color.fromRGBO(238, 242, 236, .98)], deg: 170),
-    tab: _lin(const [Color.fromRGBO(255, 255, 255, .86), Color.fromRGBO(248, 250, 255, .66)]),
+    tab: _lin(const [Color.fromRGBO(255, 255, 255, .94), Color.fromRGBO(248, 250, 255, .84)]),
     tabpill: _lin(const [Color.fromRGBO(62, 107, 90, .24), Color.fromRGBO(62, 107, 90, .1)]),
     bg: _lin([hexA(0xF4F2EC), hexA(0xEEF1EA), hexA(0xE6EEEA)], deg: 170),
     b1: hexA(0x7FB59A), b2: hexA(0xFBC08A), b3: hexA(0x9DBEFF), bo1: .55, bo2: .45, bo3: .55,
@@ -73,7 +73,7 @@ class VC {
   static VC of(BuildContext c) => Theme.of(c).brightness == Brightness.dark ? dark_ : light_;
 
   /// Card shadow (the design's inset highlight is drawn by [GlassPainter]).
-  List<BoxShadow> get shadow => [BoxShadow(color: Color.fromRGBO(dark ? 0 : 15, dark ? 0 : 45, dark ? 0 : 35, dark ? .26 : .13), blurRadius: 30, offset: const Offset(0, 10))];
+  List<BoxShadow> get shadow => [BoxShadow(color: Color.fromRGBO(dark ? 0 : 15, dark ? 0 : 45, dark ? 0 : 35, dark ? .26 : .13), blurRadius: 16, offset: const Offset(0, 6))];
   Color get primShadow => dark ? const Color.fromRGBO(80, 210, 150, .3) : const Color.fromRGBO(15, 45, 35, .3);
   Color get topLight => dark ? const Color.fromRGBO(255, 255, 255, .5) : Colors.white;
 }

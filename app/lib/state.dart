@@ -156,6 +156,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   int? batteryPct;
   StreamSubscription<Position>? _posSub;
   StreamSubscription<MagnetometerEvent>? _magSub;
+  int _lastHeadingNotify = 0;
   final Battery _battery = Battery();
 
   // Trip
@@ -388,9 +389,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           var d = h - heading;
           if (d > 180) d -= 360;
           if (d < -180) d += 360;
-          heading = hasHeading ? (heading + d * .2 + 360) % 360 : h;
+          final next = hasHeading ? (heading + d * .2 + 360) % 360 : h;
+          final first = !hasHeading;
+          final moved = (next - heading).abs();
+          heading = next;
           hasHeading = true;
-          notifyListeners();
+          // The compass sensor fires ~60 times a second. Redraw at most ~20 times a second, and only for a real change.
+          final t = DateTime.now().millisecondsSinceEpoch;
+          if (first || (moved >= .8 && t - _lastHeadingNotify >= 50)) {
+            _lastHeadingNotify = t;
+            notifyListeners();
+          }
         }, onError: (_) { hasHeading = false; });
       } catch (_) {}
     } else if (!need && _magSub != null) {
@@ -426,7 +435,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         trail.add(TrailPoint(pos!.latitude, pos!.longitude, ts));
         _savePoint(pos!.latitude, pos!.longitude, ts, pos!.accuracy);
       }
-      _tripTick = Timer.periodic(const Duration(seconds: 1), (_) { now = DateTime.now(); notifyListeners(); });
     } else {
       _tripTick?.cancel();
     }
@@ -457,7 +465,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     for (var i = 1; i < trail.length; i++) { d += Geolocator.distanceBetween(trail[i - 1].lat, trail[i - 1].lon, trail[i].lat, trail[i].lon); }
     return d;
   }
-  Duration get elapsed => tripStart == null ? Duration.zero : now.difference(tripStart!);
+  Duration get elapsed => tripStart == null ? Duration.zero : DateTime.now().difference(tripStart!);
 
   Future<void> setCheckin(bool on) async {
     checkin = on;
@@ -615,11 +623,16 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       ai.callEmergency = true;
       return;
     }
+    var lastPaint = 0;
     final r = await a.respond(text, lang: lang, history: history, onPartial: (p) {
       if (!chat.contains(ai)) chat.add(ai);
       ai.text = p;
       typing = false;
-      notifyListeners();
+      final t = DateTime.now().millisecondsSinceEpoch;
+      if (t - lastPaint >= 80) {
+        lastPaint = t;
+        notifyListeners();
+      }
     });
     ai
       ..text = r.text

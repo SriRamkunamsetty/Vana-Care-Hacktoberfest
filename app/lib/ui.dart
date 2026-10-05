@@ -115,7 +115,7 @@ class SheetFrame extends StatelessWidget {
       child: Glass(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(44)),
         gradient: vc.sheet,
-        blur: 40,
+        blur: 22,
         child: Padding(
           padding: EdgeInsets.fromLTRB(20, 14, 20, 20 + mq.viewInsets.bottom + mq.padding.bottom),
           child: Column(children: [

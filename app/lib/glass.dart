@@ -74,7 +74,18 @@ class _TopLight extends CustomPainter {
   bool shouldRepaint(_TopLight o) => o.color != color || o.radius != radius;
 }
 
-/// Frosted-glass surface: backdrop blur + gradient fill + hairline border + top highlight.
+/// Backdrop blur on/off for the whole app. On a tile-based mobile GPU every [BackdropFilter] makes the
+/// renderer flush and copy the entire frame, which cost ~30 ms per animated frame on a Vivo V30
+/// (measured). All surfaces that asked for a blur are already 66-98% opaque, so they look the same
+/// without it. Turn this on only for a device class you have measured.
+const bool kBackdropBlur = false;
+
+/// Frosted-glass surface: gradient fill + hairline border + top highlight, and an optional backdrop blur.
+///
+/// A [BackdropFilter] is the most expensive thing on the GPU: it re-blurs everything behind it on
+/// every frame. Cards sit over a smooth gradient background, where a blur is invisible, so [blur]
+/// defaults to 0 (no filter). Only large floating chrome that overlaps real content (tab bar,
+/// sheets) asks for a blur.
 class Glass extends StatelessWidget {
   final Widget? child;
   final double radius;
@@ -86,35 +97,31 @@ class Glass extends StatelessWidget {
   final double blur;
   final List<BoxShadow>? shadow;
   final bool border;
-  const Glass({super.key, this.child, this.radius = 28, this.borderRadius, this.padding, this.width, this.height, this.gradient, this.color, this.blur = 28, this.shadow, this.border = true});
+  const Glass({super.key, this.child, this.radius = 28, this.borderRadius, this.padding, this.width, this.height, this.gradient, this.color, this.blur = 0, this.shadow, this.border = true});
 
   @override
   Widget build(BuildContext context) {
     final vc = VC.of(context);
     final br = borderRadius ?? BorderRadius.circular(radius);
+    Widget surface = CustomPaint(
+      foregroundPainter: border ? _TopLight(vc.topLight, br) : null,
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          gradient: color == null ? (gradient ?? vc.gl) : null,
+          color: color,
+          borderRadius: br,
+          border: border ? Border.all(color: vc.glBorder, width: .5) : null,
+        ),
+        child: child,
+      ),
+    );
+    if (kBackdropBlur && blur > 0) surface = BackdropFilter(filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: surface);
     return Container(
       width: width,
       height: height,
       decoration: BoxDecoration(borderRadius: br, boxShadow: shadow ?? vc.shadow),
-      child: ClipRRect(
-        borderRadius: br,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: CustomPaint(
-            foregroundPainter: border ? _TopLight(vc.topLight, br) : null,
-            child: Container(
-              padding: padding,
-              decoration: BoxDecoration(
-                gradient: color == null ? (gradient ?? vc.gl) : null,
-                color: color,
-                borderRadius: br,
-                border: border ? Border.all(color: vc.glBorder, width: .5) : null,
-              ),
-              child: child,
-            ),
-          ),
-        ),
-      ),
+      child: ClipRRect(borderRadius: br, child: surface),
     );
   }
 }
@@ -236,39 +243,38 @@ class AlertButton extends StatelessWidget {
       );
 }
 
-/// Stacked, masked blur layers that fade out toward the content (the "gradient blur").
+/// Soft fade at the top or bottom edge so content slides under the status bar / tab bar.
+/// With [blurred] it adds ONE light masked blur layer; the old four-layer stack cost about
+/// 40 ms of GPU time per frame on a mid-range phone.
 class ProgressiveBlur extends StatelessWidget {
-  final bool top;
+  final bool top, blurred;
   final double height;
   final Color fade;
-  const ProgressiveBlur({super.key, required this.top, required this.height, required this.fade});
-
-  Widget _layer(double sigma, List<double> stops) {
-    final b = top ? Alignment.topCenter : Alignment.bottomCenter;
-    final e = top ? Alignment.bottomCenter : Alignment.topCenter;
-    return Positioned.fill(
-      child: ShaderMask(
-        blendMode: BlendMode.dstIn,
-        shaderCallback: (r) => LinearGradient(begin: b, end: e, colors: const [Colors.black, Colors.black, Colors.transparent], stops: stops).createShader(r),
-        child: ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma), child: Container(color: Colors.transparent))),
-      ),
-    );
-  }
+  const ProgressiveBlur({super.key, required this.top, required this.height, required this.fade, this.blurred = false});
 
   @override
-  Widget build(BuildContext context) => IgnorePointer(
+  Widget build(BuildContext context) {
+    final b = top ? Alignment.topCenter : Alignment.bottomCenter;
+    final e = top ? Alignment.bottomCenter : Alignment.topCenter;
+    return IgnorePointer(
+      child: RepaintBoundary(
         child: SizedBox(
           height: height,
           child: Stack(children: [
-            _layer(1, const [0, .7, 1]),
-            _layer(3, const [0, .5, .8]),
-            _layer(8, const [0, .3, .6]),
-            _layer(18, const [0, .12, .4]),
-            Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: top ? Alignment.topCenter : Alignment.bottomCenter, end: top ? Alignment.bottomCenter : Alignment.topCenter, colors: [fade, fade.withValues(alpha: 0)])))),
+            if (blurred && kBackdropBlur)
+              Positioned.fill(
+                child: ShaderMask(
+                  blendMode: BlendMode.dstIn,
+                  shaderCallback: (r) => LinearGradient(begin: b, end: e, colors: const [Colors.black, Colors.black, Colors.transparent], stops: const [0, .35, .9]).createShader(r),
+                  child: ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6), child: const SizedBox.expand())),
+                ),
+              ),
+            Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: b, end: e, colors: [fade, fade.withValues(alpha: 0)], stops: const [0, 1])))),
           ]),
         ),
-      );
-
+      ),
+    );
+  }
 }
 
 /// Round glass icon button (back, close, etc).
